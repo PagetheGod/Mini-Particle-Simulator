@@ -12,8 +12,14 @@
 #include <SDL3/SDL_vulkan.h>
 #include <iostream>
 #include <format>
+#include "Application.hpp"
 
 int main()
 {
+    Application App;
+    if (!App.Initialize())
+    {
+        std::cerr << "Application failed to initialize!" << std::endl;
+    }
 
 }
