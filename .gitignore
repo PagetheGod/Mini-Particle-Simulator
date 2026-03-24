@@ -1,0 +1,16 @@
+#Binaries
+Binaries/
+Output/
+build*/
+#Visual studio
+*.sln
+*.vcxproj
+*.filters
+*.user
+.vs/
+out/
+#idea
+.idea/
+#compiled shaders
+/Shaders/
+*.cso
