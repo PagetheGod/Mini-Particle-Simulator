@@ -3,9 +3,9 @@ cmake_minimum_required(VERSION 4.2.3)
 
 #Define project name and its languages
 project(
-	SDL3Tutorial
+	MiniParticleSimulator
 	VERSION 0.1.0
-	DESCRIPTION "Standalone SDL3 tutorial"
+	DESCRIPTION "A mini, simplified particle simulator."
 	LANGUAGES C CXX
 )
 
@@ -60,7 +60,9 @@ find_package(Vulkan REQUIRED)
 # listed source files. We'll add more .cpp files here as the project grows.
 add_executable(${PROJECT_NAME}
     src/main.cpp
- "src/vk_init.h" "src/vk_init.cpp" "src/Renderer_Backend.h" "src/Startup.h" "src/Startup.cpp")
+        src/Public/Application.cpp
+        src/Public/Application.hpp
+)
 
 
  # ---------------------------------------------------------------------------
@@ -111,6 +113,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
+    ${CMAKE_SOURCE_DIR}/src/Public
 )
 
 
@@ -158,9 +161,9 @@ set(SHADER_OUTPUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Shaders)
 
 #Define shader source files with DXC Profile, profile tells compiler what kind of shader are we working with
 set(SHADER_SOURCES
-    ${CMAKE_SOURCE_DIR}/Shaders/Particle.vert.hlsl vs_6_0 Particle.vert
-    ${CMAKE_SOURCE_DIR}/Shaders/Particle.frag.hlsl ps_6_0 Particle.frag
-    ${CMAKE_SOURCE_DIR}/Shaders/Particle.update.comp.hlsl cs_6_0 Particle_Update.comp
+    ${CMAKE_SOURCE_DIR}/src/Shaders/Particle.vert.hlsl vs_6_0 Particle.vert
+    ${CMAKE_SOURCE_DIR}/src/Shaders/Particle.frag.hlsl ps_6_0 Particle.frag
+    ${CMAKE_SOURCE_DIR}/src/Shaders/Particle.update.comp.hlsl cs_6_0 Particle_Update.comp
 )
 # Parse the shader list (triplets: source, profile, output_name)
 set(SHADER_BINARIES "")
