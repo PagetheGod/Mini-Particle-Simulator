@@ -1,13 +1,175 @@
-﻿//
-// Created by YWvin on 2026/3/24.
-//
+﻿#pragma once
 
-#ifndef MINIPARTICLESIMULATOR_HARDWARERENDERER_HPP
-#define MINIPARTICLESIMULATOR_HARDWARERENDERER_HPP
+#include <vulkan/vulkan.h>
+#include <SDL3/SDL.h>
+#include <vector>
+#include <cstdint>
 
-
-class HardwareRenderer {
+// For debug/validation layer
+static constexpr bool ENABLE_VALIDATION_LAYERS = true;
+const std::vector<const char*> VALIDATION_LAYERS = {
+    "VK_LAYER_KHRONOS_validation"
 };
 
 
-#endif //MINIPARTICLESIMULATOR_HARDWARERENDERER_HPP
+/* Helper: Find queue families for a physical device
+/* Returns true if the device has all queue families we need.
+/* Fills in the family indices in the context. */
+struct QueueFamilyIndices
+{
+	uint32_t GraphicsFamily = UINT32_MAX;
+	uint32_t PresentFamily = UINT32_MAX;
+	uint32_t ComputeFamily = UINT32_MAX;
+	bool IsComplete() const
+	{
+		return GraphicsFamily != UINT32_MAX && PresentFamily != UINT32_MAX && ComputeFamily != UINT32_MAX;
+	}
+};
+
+
+// This class will manage vulkan side bussiness
+// Initializing vulkan, loading shaders, issuing draw calls, etc.
+class HardwareRenderer
+{
+public:
+    HardwareRenderer();
+    HardwareRenderer(const HardwareRenderer&) = delete;
+    HardwareRenderer& operator=(const HardwareRenderer&) = delete;
+    HardwareRenderer(HardwareRenderer&& ) = delete;
+    HardwareRenderer& operator=(HardwareRenderer&&) = delete;
+    ~HardwareRenderer();
+
+    // Actual work functions
+    bool Initialize();
+
+
+public:
+    /* Offscreen render target for supersampled particle rendering
+    /* Particles rendered directly to swapchain images.
+    /* Now particles render to this 2560×1440 image, then get blitted to
+    /* the viewport region of the swapchain.
+    */
+    struct OffscreenTarget
+    {
+        VkImage VkImage = nullptr; // Similar to DX11Texture2D
+        VkDeviceMemory VkMemory = nullptr;
+        VkImageView VkImageView = nullptr;
+        VkRenderPass RenderPass = nullptr;
+        VkFramebuffer Framebuffer = nullptr;
+        uint32_t Width  = 0;
+        uint32_t Height = 0;
+        VkFormat Format = VK_FORMAT_UNDEFINED;
+    };
+
+
+    // Vulkan context that controls vulkan states, these are vulkan objects
+	// Bundled into a fat struct so they get cleaned up easily
+	// Emphasis on easy cleanup, this huge bag of evils would hurt my sanity if I don't do bundling like this
+	struct VulkanContext
+	{
+		//Core functionalities
+		VkInstance VulkanInstance = nullptr;
+		VkDebugUtilsMessengerEXT VulkanDebugMessenger = nullptr;
+		VkSurfaceKHR VulkanSurface = nullptr;//The extension(non-core vk) that allows us to actually display stuffs
+		VkPhysicalDevice VulkanPhysicalDevice = nullptr;
+		VkDevice VulkanDevice = nullptr;
+
+		//Queue Handles
+		VkQueue GraphicsQueue = nullptr;// Sumbit draw commands here
+		VkQueue PresentQueue = nullptr;// Presentation queue
+		VkQueue ComputeQueue = nullptr;// Optional queue to dispatch compute shaders
+
+		//Queue family indices
+		uint32_t GraphicsFamily = UINT32_MAX;
+		uint32_t PresentFamily = UINT32_MAX;
+		uint32_t ComputeFamily = UINT32_MAX;
+
+		//Swapchain
+		VkSwapchainKHR SwapChain = nullptr;
+		VkFormat SwapChainFormat = VK_FORMAT_UNDEFINED;// Same stuffs as the DX11 formats(DXGI_FORMAT_XXX)
+		VkExtent2D SwapChainExtent = { 0, 0 };
+		std::vector<VkImage> SwapChainImages;
+		std::vector<VkImageView> SwapChainImageViews;// Yes it's view, does what it says
+
+		// Offscreen render target
+	    // This is the 2560×1440 image particles render to.
+		OffscreenTarget OffScreen;
+
+
+		//Render pass & framebuffers
+		// - offscreen.render_pass (Pass A): particles → offscreen image
+		//  loadOp=CLEAR, finalLayout=TRANSFER_SRC_OPTIMAL
+		// - swapchain_render_pass (Pass B): ImGui → swapchain image
+		//  loadOp=LOAD, finalLayout=PRESENT_SRC_KHR
+		VkRenderPass SwapChainRenderPass = nullptr;
+		std::vector<VkFramebuffer> FrameBuffers;
+
+		//Pipeline
+		VkPipelineLayout GraphicsPipelineLayout = nullptr;
+		VkPipeline GraphicsPipeline = nullptr;
+		VkPipelineLayout ComputePipelineLayout = nullptr;
+		VkPipeline ComputePipeline = nullptr;
+
+		//Command pools and buffers
+		VkCommandPool CommandPool = nullptr;
+		std::vector<VkCommandBuffer> CommandBuffers;
+
+		//Synchronization
+		std::vector<VkSemaphore> ImageAvailableSemaphores;
+		std::vector<VkSemaphore> RenderFinishedSemaphores;
+		std::vector<VkFence> InFlightFence;
+
+		//Descriptor sets for compute
+		VkDescriptorSetLayout DescriptorSetLayout = nullptr;
+		VkDescriptorPool      DescriptorPool = nullptr;
+		std::vector<VkDescriptorSet> DescriptorSets;
+
+		//SDL window reference
+		SDL_Window* Window = nullptr;
+
+		// Maximum frames that can be in-flight simultaneously.
+		// 2 means double-buffering of command submission (not the swapchain).
+		static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+		uint32_t CurrentFrame = 0;
+	};
+private:
+	// Create vulkan instance with all the validation layers and SDL3 extensions
+	bool CreateInstance(VulkanContext& Context);
+
+	// Set up debug messenger callback(validation layer output)
+	bool SetupDebugMessenger(VulkanContext& Context);
+	bool CreateSurface(VulkanContext& Context);
+
+	// Check blit format support
+	bool CheckBlitSupport(VkPhysicalDevice Device, VkFormat Format);
+
+	// Function rate physical devices(GPUs), this helps us pick the best one to render
+	uint32_t RatePhysicalDevices(VkPhysicalDevice Device, VkSurfaceKHR& Surface);
+	bool PickPhysicalDevice(VulkanContext& Context);
+
+	bool CreateLogicalDevice(VulkanContext& Context);
+	bool CreateSwapChain(VulkanContext& Context);
+	bool CreateOffscreenTarget(VulkanContext& Context);
+	bool CreateOffScreenRenderPass(VulkanContext& Context);
+	bool CreateSwapChainRenderPass(VulkanContext& Context);
+	bool CreateFrameBuffers(VulkanContext& Context);
+	bool CreateCommandPool(VulkanContext& Context);
+	bool AllocateCommandBuffers(VulkanContext& Context);
+	bool CreateSyncObjects(VulkanContext& Context);
+	bool CleanUpContext(VulkanContext& Context);
+
+	// Helpers
+	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice Device, VkSurfaceKHR Surface);
+	bool CheckDeviceExtensionSupport(VkPhysicalDevice Device);
+	bool CheckValidationLayers();
+private:
+	VulkanContext m_VulkanContext;
+	// Device extensions we require. Every device must support these.
+	// VK_KHR_SWAPCHAIN_EXTENSION_NAME is needed to present images to the screen.
+	const std::vector<const char*> DEVICE_EXTENSIONS = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+};
+
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT Severity,
+	VkDebugUtilsMessageTypeFlagsEXT Type, const VkDebugUtilsMessengerCallbackDataEXT* CallBackData,
+	void* UserData);

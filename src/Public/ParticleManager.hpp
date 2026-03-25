@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include <cstdint>
-
+#include <glm/glm.hpp>
 
 /*
  * This class will handle creating, updating, and destroying particles
@@ -11,6 +11,17 @@ struct ParticleSimulatorConfig
 {
 
 };
+
+struct Particle
+{
+    float X, Y, Z;
+    float Vx, Vy, Vz;
+    float Ax, Ay, Az;
+    float R, G, B;
+    float Size;
+    float LifeTime;
+};
+
 
 class ParticleManager {
 public:

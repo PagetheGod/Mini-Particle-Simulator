@@ -41,7 +41,9 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # EXCLUDE_FROM_ALL means "don't build SDL3's tests and examples — just
 # the library itself."
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
-
+# Add the subdirectory for glm, same deal, exclude from all tells CMake
+# to only build parts of glm that we depend on
+add_subdirectory(external/glm EXCLUDE_FROM_ALL)
 # ---------------------------------------------------------------------------
 # Vulkan — find the system installation
 # ---------------------------------------------------------------------------
@@ -60,8 +62,17 @@ find_package(Vulkan REQUIRED)
 # listed source files. We'll add more .cpp files here as the project grows.
 add_executable(${PROJECT_NAME}
     src/main.cpp
-        src/Public/Application.cpp
+        src/Private/Application.cpp
         src/Public/Application.hpp
+        src/Private/ParticleManager.cpp
+        src/Public/ParticleManager.hpp
+        src/Public/Commons.hpp
+        src/Private/SoftwareRenderer.cpp
+        src/Public/SoftwareRenderer.hpp
+        src/Private/UIManager.cpp
+        src/Public/UIManager.hpp
+        src/Private/HardwareRenderer.cpp
+        src/Public/HardwareRenderer.hpp
 )
 
 
@@ -220,6 +231,7 @@ add_custom_target(CompileShaders ALL DEPENDS ${SHADER_BINARIES})
 add_dependencies(${PROJECT_NAME} CompileShaders)
 
 
+
 # ---------------------------------------------------------------------------
 # Include directories
 # ---------------------------------------------------------------------------
@@ -240,6 +252,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     SDL3::SDL3
     Vulkan::Vulkan
+    glm::glm
 )
 
 # ---------------------------------------------------------------------------
