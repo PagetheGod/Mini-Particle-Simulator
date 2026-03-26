@@ -10,18 +10,20 @@
 #include <set>
 
 
-HardwareRenderer::HardwareRenderer() {
+HardwareRenderer::HardwareRenderer(){
 }
 
 HardwareRenderer::~HardwareRenderer() {
 }
 
-bool HardwareRenderer::Initialize() {
+bool HardwareRenderer::Initialize()
+{
+
 }
 
 
 
-bool HardwareRenderer::CreateInstance(VulkanContext& Context)
+bool HardwareRenderer::CreateInstance()
 {
     // Step 1: Check validation layer support
     if (ENABLE_VALIDATION_LAYERS && !CheckValidationLayers())
@@ -104,7 +106,7 @@ bool HardwareRenderer::CreateInstance(VulkanContext& Context)
         CreateInfo.ppEnabledLayerNames = nullptr;
     }
     // Step 5: Create the instance
-    const VkResult Result = vkCreateInstance(&CreateInfo, nullptr, &Context.VulkanInstance);
+    const VkResult Result = vkCreateInstance(&CreateInfo, nullptr, &m_VulkanContext.VulkanInstance);
 
     if (Result == VK_ERROR_INCOMPATIBLE_DRIVER)
     {
@@ -133,7 +135,7 @@ bool HardwareRenderer::CreateInstance(VulkanContext& Context)
  * It's not part of the Vulkan core, so we can't call it directly.
  * We need to look it up via vkGetInstanceProcAddr. */
 
-bool HardwareRenderer::SetupDebugMessenger(VulkanContext& Context)
+bool HardwareRenderer::SetupDebugMessenger()
 {
     if constexpr (!ENABLE_VALIDATION_LAYERS)
     {
@@ -154,7 +156,7 @@ bool HardwareRenderer::SetupDebugMessenger(VulkanContext& Context)
     // vkGetInstanceProcAddr returns a generic function pointer that we
     // cast to the specific function type. This is how all Vulkan extension
     // functions are loaded.
-    auto Func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(Context.VulkanInstance,
+    auto Func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_VulkanContext.VulkanInstance,
         "vkCreateDebugUtilsMessengerEXT");
     if (!Func)
     {
@@ -162,7 +164,7 @@ bool HardwareRenderer::SetupDebugMessenger(VulkanContext& Context)
         return false;
     }
 
-    VkResult Result = Func(Context.VulkanInstance, &CreateInfo, nullptr, &Context.VulkanDebugMessenger);
+    VkResult Result = Func(m_VulkanContext.VulkanInstance, &CreateInfo, nullptr, &m_VulkanContext.VulkanDebugMessenger);
     if (Result != VK_SUCCESS)
     {
         std::cerr << "Failed to set up debug messenger: " << Result << '\n';
@@ -173,15 +175,17 @@ bool HardwareRenderer::SetupDebugMessenger(VulkanContext& Context)
     return true;
 }
 
-bool HardwareRenderer::CreateSurface(VulkanContext& Context)
+bool HardwareRenderer::CreateSurface()
 {
-    // SDL3 creates the platform-specific Vulkan surface for us.
-    // On Windows, this creates a VkWin32SurfaceKHR internally.
-    // On Linux, it creates a VkXcbSurfaceKHR or VkWaylandSurfaceKHR.
-    // We never need to know which — SDL3 handles it.
-    //
-    // The third parameter is the Vulkan memory allocator (nullptr = default).
-    if (!SDL_Vulkan_CreateSurface(Context.Window, Context.VulkanInstance, nullptr, &Context.VulkanSurface))
+    /* SDL3 creates the platform-specific Vulkan surface for us.
+     * On Windows, this creates a VkWin32SurfaceKHR internally.
+     * On Linux, it creates a VkXcbSurfaceKHR or VkWaylandSurfaceKHR.
+     * The third parameter is the Vulkan memory allocator (nullptr = default). */
+
+    // Note on surfaces - vulkan core is not platform specific. So it does not know how to interact with windows/GUI
+    // To actually display things, we add a "surface" using the Windows System Integration extension
+    // They represent an abstract surface that vulkan can use to display things to the user
+    if (!SDL_Vulkan_CreateSurface(m_VulkanContext.Window, m_VulkanContext.VulkanInstance, nullptr, &m_VulkanContext.VulkanSurface))
     {
         std::cerr << "SDL_Vulkan_CreateSurface failed: " << SDL_GetError() << '\n';
         return false;
@@ -248,10 +252,10 @@ uint32_t HardwareRenderer::RatePhysicalDevices(VkPhysicalDevice Device, VkSurfac
     return Score;
 }
 
-bool HardwareRenderer::PickPhysicalDevice(VulkanContext &Context)
+bool HardwareRenderer::PickPhysicalDevice()
 {
     uint32_t DeviceCount = 0;
-    vkEnumeratePhysicalDevices(Context.VulkanInstance, &DeviceCount, nullptr);
+    vkEnumeratePhysicalDevices(m_VulkanContext.VulkanInstance, &DeviceCount, nullptr);
     if (DeviceCount == 0)
     {
         std::cerr << "No Vulkan devices found!" << '\n';
@@ -260,7 +264,7 @@ bool HardwareRenderer::PickPhysicalDevice(VulkanContext &Context)
 
     // Enumerate through all of the devices and pick the best
     std::vector<VkPhysicalDevice> Devices(DeviceCount);
-    vkEnumeratePhysicalDevices(Context.VulkanInstance, &DeviceCount, Devices.data());
+    vkEnumeratePhysicalDevices(m_VulkanContext.VulkanInstance, &DeviceCount, Devices.data());
 
     uint32_t BestScore = 0;
     VkPhysicalDevice BestDevice = nullptr;
@@ -269,7 +273,7 @@ bool HardwareRenderer::PickPhysicalDevice(VulkanContext &Context)
     {
         VkPhysicalDeviceProperties Props;
         vkGetPhysicalDeviceProperties(Device, &Props);
-        uint32_t Score = RatePhysicalDevices(Device, Context.VulkanSurface);
+        uint32_t Score = RatePhysicalDevices(Device, m_VulkanContext.VulkanSurface);
         if (Score > BestScore)
         {
             BestScore = Score;
@@ -282,22 +286,24 @@ bool HardwareRenderer::PickPhysicalDevice(VulkanContext &Context)
         return false;
     }
 
-    Context.VulkanPhysicalDevice = BestDevice;
-    QueueFamilyIndices Indices = FindQueueFamilies(BestDevice, Context.VulkanSurface);
-    Context.GraphicsFamily = Indices.GraphicsFamily;
-    Context.PresentFamily = Indices.PresentFamily;
-    Context.ComputeFamily = Indices.ComputeFamily;
+    m_VulkanContext.VulkanPhysicalDevice = BestDevice;
+    QueueFamilyIndices Indices = FindQueueFamilies(BestDevice, m_VulkanContext.VulkanSurface);
+    m_VulkanContext.GraphicsFamily = Indices.GraphicsFamily;
+    m_VulkanContext.PresentFamily = Indices.PresentFamily;
+    m_VulkanContext.ComputeFamily = Indices.ComputeFamily;
 
     /* Check blit support for B8G8R8A8_SRGB.
      * Note: We check B8G8R8A8_SRGB here because the swapchain format isn't selected yet.
      * After create_swapchain(), verify ctx.swapchain_format also supports blit
      * if it ends up being a different format (e.g., the SRGB fallback path). */
-    CheckBlitSupport(Context.VulkanPhysicalDevice, VK_FORMAT_B8G8R8A8_SRGB);
+    CheckBlitSupport(m_VulkanContext.VulkanPhysicalDevice, VK_FORMAT_B8G8R8A8_SRGB);
+
+    return true;
 }
 
-bool HardwareRenderer::CreateLogicalDevice(VulkanContext &Context)
+bool HardwareRenderer::CreateLogicalDevice()
 {
-    std::set<uint32_t> UniqueFamilies = {Context.GraphicsFamily, Context.PresentFamily, Context.ComputeFamily};
+    std::set<uint32_t> UniqueFamilies = {m_VulkanContext.GraphicsFamily, m_VulkanContext.PresentFamily, m_VulkanContext.ComputeFamily};
     std::vector<VkDeviceQueueCreateInfo> QueueCreateInfos;
     float QueuePriority = 1.f;
 
@@ -362,7 +368,8 @@ bool HardwareRenderer::CreateLogicalDevice(VulkanContext &Context)
         CreateInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
     }
 
-    VkResult Result = vkCreateDevice(Context.VulkanPhysicalDevice, &CreateInfo, nullptr, &Context.VulkanDevice);
+    VkResult Result = vkCreateDevice(m_VulkanContext.VulkanPhysicalDevice, &CreateInfo, nullptr,
+        &m_VulkanContext.VulkanDevice);
     if (Result != VK_SUCCESS)
     {
         std::cerr << "Failed to create logical device: " << Result << '\n';
@@ -373,30 +380,30 @@ bool HardwareRenderer::CreateLogicalDevice(VulkanContext &Context)
         return false;
     }
 
-    vkGetDeviceQueue(Context.VulkanDevice, Context.GraphicsFamily, 0, &Context.GraphicsQueue);
-    vkGetDeviceQueue(Context.VulkanDevice, Context.PresentFamily, 0, &Context.PresentQueue);
-    vkGetDeviceQueue(Context.VulkanDevice, Context.ComputeFamily, 0, &Context.ComputeQueue);
+    vkGetDeviceQueue(m_VulkanContext.VulkanDevice, m_VulkanContext.GraphicsFamily, 0, &m_VulkanContext.GraphicsQueue);
+    vkGetDeviceQueue(m_VulkanContext.VulkanDevice, m_VulkanContext.PresentFamily, 0, &m_VulkanContext.PresentQueue);
+    vkGetDeviceQueue(m_VulkanContext.VulkanDevice, m_VulkanContext.ComputeFamily, 0, &m_VulkanContext.ComputeQueue);
 
     return true;
 }
 
 
-bool HardwareRenderer::CreateSwapChain(VulkanContext &Context)
+bool HardwareRenderer::CreateSwapChain()
 {
     VkSurfaceCapabilitiesKHR Capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Context.VulkanPhysicalDevice, Context.VulkanSurface, &Capabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_VulkanContext.VulkanPhysicalDevice, m_VulkanContext.VulkanSurface, &Capabilities);
 
     uint32_t FormatCount = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(Context.VulkanPhysicalDevice, Context.VulkanSurface, &FormatCount, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(m_VulkanContext.VulkanPhysicalDevice, m_VulkanContext.VulkanSurface, &FormatCount, nullptr);
     // I just realized that we know the size
     // Why bother with a vector then
     std::vector<VkSurfaceFormatKHR> Formats(FormatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(Context.VulkanPhysicalDevice, Context.VulkanSurface, &FormatCount, Formats.data());
+    vkGetPhysicalDeviceSurfaceFormatsKHR(m_VulkanContext.VulkanPhysicalDevice, m_VulkanContext.VulkanSurface, &FormatCount, Formats.data());
 
     uint32_t PresentModeCount = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(Context.VulkanPhysicalDevice, Context.VulkanSurface, &PresentModeCount, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(m_VulkanContext.VulkanPhysicalDevice, m_VulkanContext.VulkanSurface, &PresentModeCount, nullptr);
     std::vector<VkPresentModeKHR> PresentModes(PresentModeCount);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(Context.VulkanPhysicalDevice, Context.VulkanSurface, &PresentModeCount, PresentModes.data());
+    vkGetPhysicalDeviceSurfacePresentModesKHR(m_VulkanContext.VulkanPhysicalDevice, m_VulkanContext.VulkanSurface, &PresentModeCount, PresentModes.data());
 
     //Chooses format, we prefer B8G8RA SRGB
     VkSurfaceFormatKHR SurfaceFormat = Formats[0];
@@ -420,45 +427,370 @@ bool HardwareRenderer::CreateSwapChain(VulkanContext &Context)
         }
     }
 
-    //Choose extent
+    //Choose extent - the dimensions of the swapchain image
     VkExtent2D Extent = Capabilities.currentExtent;
     if (Extent.width == std::numeric_limits<uint32_t>::max())
     {
         int Width, Height;
-        SDL_GetWindowSize(Context.Window, &Width, &Height);
+        SDL_GetWindowSize(m_VulkanContext.Window, &Width, &Height);
         Extent.width = static_cast<uint32_t>(Width);
         Extent.height = static_cast<uint32_t>(Height);
         //Clamp the width and height
         Extent.width = std::clamp(Extent.width, Capabilities.minImageExtent.width, Capabilities.maxImageExtent.width);
         Extent.height = std::clamp(Extent.height, Capabilities.minImageExtent.height, Capabilities.maxImageExtent.height);
-
     }
+
+    uint32_t ImageCount = Capabilities.minImageCount + 1;
+    if (Capabilities.maxImageCount > 0 && ImageCount > Capabilities.maxImageCount)
+    {
+        // Clamp the the ImageCount so it doesn't go over our max supported swapchain buffer counts
+        ImageCount = Capabilities.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    CreateInfo.surface = m_VulkanContext.VulkanSurface;
+    CreateInfo.minImageCount = ImageCount;
+    CreateInfo.imageFormat = SurfaceFormat.format;
+    CreateInfo.imageColorSpace = SurfaceFormat.colorSpace;
+    CreateInfo.imageExtent = Extent;
+    CreateInfo.imageArrayLayers = 1;
+
+    // We need to BLIT to the swapchain
+    // (offscreen → swapchain), so the swapchain must accept transfers.
+    // COLOR_ATTACHMENT_BIT allows us to draw directly onto the swap chain image(fancy way of saying RenderTarget)
+    // TRANSFER_DST_BIT indicates that the the write to the image would be done using transfer operation(blit and copy)
+    CreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    uint32_t FamilyIndices[] = {m_VulkanContext.GraphicsFamily, m_VulkanContext.PresentFamily}; // This is about swapchain so compute family isn't involved
+    if (m_VulkanContext.GraphicsFamily != m_VulkanContext.PresentFamily)
+    {
+        // When the graphics and present queue are not the same, we need to coordinate between them
+        // So multiple queue families can access the image
+        CreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        CreateInfo.queueFamilyIndexCount = 2;
+        CreateInfo.pQueueFamilyIndices = FamilyIndices;
+    }
+    else
+    {
+        // Graphics and present queue are the same, so no need for concurrent access
+        CreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    CreateInfo.preTransform = Capabilities.currentTransform;
+    CreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    CreateInfo.presentMode = PresentMode;
+    CreateInfo.clipped = VK_TRUE; // Note on VK_TRUE, it's 1U, so I am not replacing it using just bool
+    // Pass the old swapchain so the driver can reuse resources.
+    // On first creation, ctx.swapchain is nullptr (initialized in VulkanContext).
+    // On recreation, it holds the old handle — the driver recycles internal structures.
+    CreateInfo.oldSwapchain = m_VulkanContext.SwapChain;
+
+    if (vkCreateSwapchainKHR(m_VulkanContext.VulkanDevice, &CreateInfo, nullptr,
+        &m_VulkanContext.SwapChain) != VK_SUCCESS)
+    {
+        std::cerr << "Failed to create swapchain!" << '\n';
+        return false;
+    }
+    // Set the states in the context struct
+    m_VulkanContext.SwapChainFormat = SurfaceFormat.format;
+    m_VulkanContext.SwapChainExtent = Extent;
+
+    vkGetSwapchainImagesKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, &ImageCount, nullptr);
+    m_VulkanContext.SwapChainImages.reserve(ImageCount);
+    vkGetSwapchainImagesKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, &ImageCount, m_VulkanContext.SwapChainImages.data());
+
+    m_VulkanContext.SwapChainImageViews.reserve(ImageCount);
+
+    for (size_t i = 0; i < ImageCount; i++)
+    {
+        VkImageViewCreateInfo ViewCreateInfo = {};
+        ViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        ViewCreateInfo.image = m_VulkanContext.SwapChainImages[i];
+        ViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        ViewCreateInfo.format = m_VulkanContext.SwapChainFormat;
+        ViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        ViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        ViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        ViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        ViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        ViewCreateInfo.subresourceRange.baseMipLevel = 0;
+        ViewCreateInfo.subresourceRange.levelCount = 1;
+        ViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        ViewCreateInfo.subresourceRange.layerCount = 1;
+        if (vkCreateImageView(m_VulkanContext.VulkanDevice, &ViewCreateInfo, nullptr,
+            &m_VulkanContext.SwapChainImageViews[i]) != VK_SUCCESS)
+        {
+            std::cerr << "Failed to create swapchain image view for image " << i << '\n';
+            return false;
+        }
+    }
+
+
     return true;
 
 }
 
-bool HardwareRenderer::CreateOffscreenTarget(VulkanContext &Context) {
+bool HardwareRenderer::CreateOffscreenTarget(uint32_t Width, uint32_t Height) {
+    m_VulkanContext.OffScreen.Width = Width;
+    m_VulkanContext.OffScreen.Height = Height;
+
+    // Create the image
+    // COLOR_ATTACHMENT: we render to it
+    // TRANSFER_SRC: we blit from it to the swapchain
+    VkImageCreateInfo ImageInfo = {};
+    ImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    ImageInfo.imageType = VK_IMAGE_TYPE_2D;
+    ImageInfo.format = m_VulkanContext.OffScreen.Format;
+    ImageInfo.extent.width = Width;
+    ImageInfo.extent.height = Height;
+    ImageInfo.extent.depth = 1;
+    ImageInfo.mipLevels = 1;
+    ImageInfo.arrayLayers = 1;
+    ImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    ImageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    ImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    ImageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    if (vkCreateImage(m_VulkanContext.VulkanDevice, &ImageInfo, nullptr,
+        &m_VulkanContext.OffScreen.VkImage) != VK_SUCCESS)
+    {
+        std::cerr << "Failed to create offscreen image!" << '\n';
+        return false;
+    }
+
+    // Allocate device-local memory (device local - fast VRAM which can't be mapped to CPU)
+    VkMemoryRequirements MemReqs;
+    vkGetImageMemoryRequirements(m_VulkanContext.VulkanDevice, m_VulkanContext.OffScreen.VkImage, &MemReqs);
+
+    VkMemoryAllocateInfo AllocInfo = {};
+    AllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    AllocInfo.allocationSize = MemReqs.size;
+    AllocInfo.memoryTypeIndex = FindMemoryType(m_VulkanContext.VulkanPhysicalDevice, MemReqs.memoryTypeBits,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (AllocInfo.memoryTypeIndex == UINT32_MAX)
+    {
+        std::cerr << "Failed to find a suitable memory type for offscreen image!" << '\n';
+        return false;
+    }
+    if (vkAllocateMemory(m_VulkanContext.VulkanDevice, &AllocInfo, nullptr,
+        &m_VulkanContext.OffScreen.VkMemory) != VK_SUCCESS)
+    {
+        std::cerr << "Failed to allocate offscreen memory!" << '\n';
+        return false;
+    }
+
+    // Create the image view, views are objects that are used to interface with GPU memory
+    // They tell vulkan what's the format, how are we viewing it, and what part of the memory we want to access
+    VkImageViewCreateInfo ViewInfo = {};
+    ViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ViewInfo.image = m_VulkanContext.OffScreen.VkImage;
+    ViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    ViewInfo.format = m_VulkanContext.OffScreen.Format;
+    ViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    ViewInfo.subresourceRange.baseMipLevel = 0;
+    ViewInfo.subresourceRange.levelCount = 1;
+    ViewInfo.subresourceRange.baseArrayLayer = 0;
+    ViewInfo.subresourceRange.layerCount = 1;
+    if (vkCreateImageView(m_VulkanContext.VulkanDevice, &ViewInfo, nullptr,
+        &m_VulkanContext.OffScreen.VkImageView) != VK_SUCCESS)
+    {
+        std::cerr << "Failed to create offscreen image view!" << '\n';
+        return false;
+    }
+
+    // Create the frame buffer and bind it to the first pass(particles)
+    VkFramebufferCreateInfo FrameBufferCreateInfo = {};
+    FrameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    FrameBufferCreateInfo.renderPass = m_VulkanContext.OffScreen.RenderPass;
+    FrameBufferCreateInfo.attachmentCount = 1;
+    FrameBufferCreateInfo.pAttachments = &m_VulkanContext.OffScreen.VkImageView;
+    FrameBufferCreateInfo.width = Width;
+    FrameBufferCreateInfo.height = Height;
+    FrameBufferCreateInfo.layers = 1;
+    if (vkCreateFramebuffer(m_VulkanContext.VulkanDevice, &FrameBufferCreateInfo, nullptr,
+        &m_VulkanContext.OffScreen.Framebuffer) != VK_SUCCESS)
+    {
+        std::cerr << "Failed to create offscreen framebuffer!" << '\n';
+        return false;
+    }
+
+    return true;
 }
 
-bool HardwareRenderer::CreateOffScreenRenderPass(VulkanContext &Context) {
+bool HardwareRenderer::CreateOffScreenRenderPass()
+{
+    // Man I miss when I can just OMSetRenderTarget() + Draw() in DX11
+    // Like what do you mean I have to set up the target AND the entire pass object
+
+
+    // Offscreen supersampling target where the particles will go directly
+    // Its format matches the swap chain for blit compatibility
+    VkAttachmentDescription OffscreenAttachmentDesc = {};
+    OffscreenAttachmentDesc.format = m_VulkanContext.SwapChainFormat;
+    OffscreenAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+    OffscreenAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // We clear the entire target image each frame
+    OffscreenAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    OffscreenAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // We don't use the stencil buffer
+    OffscreenAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // No stencil
+    OffscreenAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    // This is a key flag, it tells vulkan that we will be transfering FROM this image
+    OffscreenAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+    // An attachment reference tells vulkan which subpass uses which slot in the description array
+    VkAttachmentReference OffscreenAttachmentRef = {};
+    OffscreenAttachmentRef.attachment = 0;
+    OffscreenAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription OffscreenSubpassDesc = {};
+    OffscreenSubpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    OffscreenSubpassDesc.colorAttachmentCount = 1;
+    OffscreenSubpassDesc.pColorAttachments = &OffscreenAttachmentRef;
+
+    // Two dependencies: incoming (external → subpass 0) and outgoing (subpass 0 → external)
+    VkSubpassDependency OffscreenSubpassDep[2]{}; //Note: DO NOT leave vulkan stuffs uninitialized, USE BRACES!
+
+    // All the following dependencies voodoos are just synchronization rules that let vulkan knows:
+    // "Hey I want a to be done before b gets started"
+
+
+    // External → Subpass 0
+    // Wait for any prior color attachment work to finish before we start writing
+    OffscreenSubpassDep[0].srcSubpass = VK_SUBPASS_EXTERNAL; // This means "ANYTHING outside of this pass"
+    OffscreenSubpassDep[0].dstSubpass = 0; // First subpass
+    OffscreenSubpassDep[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // Which stage to wait/block
+    OffscreenSubpassDep[0].srcAccessMask = 0; // Which memory operation r/w to synchronize
+    OffscreenSubpassDep[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    OffscreenSubpassDep[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    // Subpass 0 → External
+    // Synchronize color attachment writes with the subsequent blit read.
+    // Without this, the blit may read stale data from the offscreen image
+    OffscreenSubpassDep[1].srcSubpass = 0;
+    OffscreenSubpassDep[1].dstSubpass = VK_SUBPASS_EXTERNAL; // Whatever comes AFTER our drawing pass
+    OffscreenSubpassDep[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    OffscreenSubpassDep[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    OffscreenSubpassDep[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    OffscreenSubpassDep[1].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+    // Fill the create info and create as usual
+    VkRenderPassCreateInfo OffscreenRenderPassCreateInfo = {};
+    OffscreenRenderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    OffscreenRenderPassCreateInfo.attachmentCount = 1;
+    OffscreenRenderPassCreateInfo.pAttachments = &OffscreenAttachmentDesc;
+    OffscreenRenderPassCreateInfo.subpassCount = 1;
+    OffscreenRenderPassCreateInfo.pSubpasses = &OffscreenSubpassDesc;
+    OffscreenRenderPassCreateInfo.dependencyCount = 2;
+    OffscreenRenderPassCreateInfo.pDependencies = OffscreenSubpassDep;
+
+    if (vkCreateRenderPass(m_VulkanContext.VulkanDevice, &OffscreenRenderPassCreateInfo, nullptr, &m_VulkanContext.OffScreen.RenderPass) != VK_SUCCESS)
+    {
+        std::cerr << "Failed to create offscreen render pass!" << '\n';
+        return false;
+    }
+
+    return true;
 }
 
-bool HardwareRenderer::CreateSwapChainRenderPass(VulkanContext &Context) {
+bool HardwareRenderer::CreateSwapChainRenderPass()
+{
+    VkAttachmentDescription ColorAttachmentDesc = {};
+    ColorAttachmentDesc.format = m_VulkanContext.SwapChainFormat;
+    ColorAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    // The swap chain already has the blitted image containing the particles
+    // So we load instead of clear here
+    ColorAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    ColorAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    ColorAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    ColorAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    ColorAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    ColorAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // This time we presents
+
+    VkAttachmentReference ColorAttachmentRef = {};
+    ColorAttachmentRef.attachment = 0;
+    ColorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription SwapchainSubpassDesc = {};
+    SwapchainSubpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    SwapchainSubpassDesc.colorAttachmentCount = 1;
+    SwapchainSubpassDesc.pColorAttachments = &ColorAttachmentRef;
+
+    // No external dependency needed — the barrier before this pass
+    // (in the command buffer) already handles synchronization.
+    VkSubpassDependency SwapchainSubpassDep = {};
+    SwapchainSubpassDep.srcSubpass = VK_SUBPASS_EXTERNAL;
+    SwapchainSubpassDep.dstSubpass = 0;
+    SwapchainSubpassDep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    SwapchainSubpassDep.srcAccessMask = 0;
+    SwapchainSubpassDep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    SwapchainSubpassDep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo SwapchainRenderPassCreateInfo = {};
+    SwapchainRenderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    SwapchainRenderPassCreateInfo.attachmentCount = 1;
+    SwapchainRenderPassCreateInfo.pAttachments = &ColorAttachmentDesc;
+    SwapchainRenderPassCreateInfo.subpassCount = 1;
+    SwapchainRenderPassCreateInfo.pSubpasses = &SwapchainSubpassDesc;
+    SwapchainRenderPassCreateInfo.dependencyCount = 1;
+    SwapchainRenderPassCreateInfo.pDependencies = &SwapchainSubpassDep;
+
+    if (vkCreateRenderPass(m_VulkanContext.VulkanDevice, &SwapchainRenderPassCreateInfo, nullptr, &m_VulkanContext.SwapChainRenderPass) != VK_SUCCESS)
+    {
+        std::cerr << "Failed to create swapchain render pass!" << '\n';
+        return false;
+    }
+    return true;
 }
 
-bool HardwareRenderer::CreateFrameBuffers(VulkanContext &Context) {
+bool HardwareRenderer::CreateFrameBuffers()
+{
+    m_VulkanContext.FrameBuffers.reserve(m_VulkanContext.SwapChainImages.size());
+    for (size_t i = 0; i < m_VulkanContext.SwapChainImages.size(); i++)
+    {
+
+    }
 }
 
-bool HardwareRenderer::CreateCommandPool(VulkanContext &Context) {
+bool HardwareRenderer::CreateCommandPool() {
 }
 
-bool HardwareRenderer::AllocateCommandBuffers(VulkanContext &Context) {
+bool HardwareRenderer::AllocateCommandBuffers() {
 }
 
-bool HardwareRenderer::CreateSyncObjects(VulkanContext &Context) {
+bool HardwareRenderer::CreateSyncObjects() {
 }
 
-bool HardwareRenderer::CleanUpContext(VulkanContext &Context) {
+bool HardwareRenderer::CleanUpContext() {
+}
+
+void HardwareRenderer::DestoryOffscreenTarget()
+{
+    // The clean up of the offscreen target HAS To be done in this order
+    // Otherwise vulkan flips out and app goes boom
+
+    if (m_VulkanContext.OffScreen.Framebuffer != nullptr)
+    {
+        vkDestroyFramebuffer(m_VulkanContext.VulkanDevice, m_VulkanContext.OffScreen.Framebuffer, nullptr);
+    }
+    if (m_VulkanContext.OffScreen.RenderPass != nullptr)
+    {
+        vkDestroyRenderPass(m_VulkanContext.VulkanDevice, m_VulkanContext.OffScreen.RenderPass, nullptr);
+    }
+    if (m_VulkanContext.OffScreen.VkImageView != nullptr)
+    {
+        vkDestroyImageView(m_VulkanContext.VulkanDevice, m_VulkanContext.OffScreen.VkImageView, nullptr);
+    }
+    if (m_VulkanContext.OffScreen.VkImage != nullptr)
+    {
+        vkDestroyImage(m_VulkanContext.VulkanDevice, m_VulkanContext.OffScreen.VkImage, nullptr);
+    }
+    if (m_VulkanContext.OffScreen.VkMemory != nullptr)
+    {
+        vkFreeMemory(m_VulkanContext.VulkanDevice, m_VulkanContext.OffScreen.VkMemory, nullptr);
+    }
+    m_VulkanContext.OffScreen = {};
 }
 
 
@@ -578,6 +910,27 @@ bool HardwareRenderer::CheckValidationLayers()
     return true;
 }
 
+uint32_t HardwareRenderer::FindMemoryType(VkPhysicalDevice PhysicalDevice, uint32_t TypeFilter,
+    VkMemoryPropertyFlags Properties)
+{
+    // This function gets athe memory types supported by our gpu
+    // Then check whether each memory type compatible with our resources
+    // And whether it has all the properties
+
+    // And yes the TypeFilter is returned as bit mask, evil :(
+    VkPhysicalDeviceMemoryProperties MemProps;
+    vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &MemProps);
+    for (uint32_t i = 0; i < MemProps.memoryTypeCount; i++)
+    {
+        // Look
+        if ((TypeFilter & (1 << i)) && (MemProps.memoryTypes[i].propertyFlags & Properties) == Properties)
+        {
+            return i;
+        }
+    }
+    return UINT32_MAX;
+}
+
 /* Helper: Debug callback function
  * This function is called by the validation layer whenever it detects an
  * issue. The parameters tell you what happened and how severe it is.
@@ -587,8 +940,8 @@ bool HardwareRenderer::CheckValidationLayers()
  *  WARNING — Something that might be a bug but isn't necessarily wrong
  *   ERROR   — A definite Vulkan specification violation
  * messageType:
- *   GENERAL     — Unrelated to spec or performance
- *   VALIDATION  — Violates the Vulkan specification
+ *  GENERAL     — Unrelated to spec or performance
+ *  VALIDATION  — Violates the Vulkan specification
  *  PERFORMANCE — Non-optimal use of Vulkan (e.g., unnecessary barriers)
  * We return VK_FALSE because returning VK_TRUE would abort the Vulkan call
  * that triggered the message, which is almost never what you want. */

@@ -134,34 +134,41 @@ public:
 	};
 private:
 	// Create vulkan instance with all the validation layers and SDL3 extensions
-	bool CreateInstance(VulkanContext& Context);
+	bool CreateInstance();
 
 	// Set up debug messenger callback(validation layer output)
-	bool SetupDebugMessenger(VulkanContext& Context);
-	bool CreateSurface(VulkanContext& Context);
+	bool SetupDebugMessenger();
+	bool CreateSurface();
 
 	// Check blit format support
 	bool CheckBlitSupport(VkPhysicalDevice Device, VkFormat Format);
 
 	// Function rate physical devices(GPUs), this helps us pick the best one to render
 	uint32_t RatePhysicalDevices(VkPhysicalDevice Device, VkSurfaceKHR& Surface);
-	bool PickPhysicalDevice(VulkanContext& Context);
+	bool PickPhysicalDevice();
 
-	bool CreateLogicalDevice(VulkanContext& Context);
-	bool CreateSwapChain(VulkanContext& Context);
-	bool CreateOffscreenTarget(VulkanContext& Context);
-	bool CreateOffScreenRenderPass(VulkanContext& Context);
-	bool CreateSwapChainRenderPass(VulkanContext& Context);
-	bool CreateFrameBuffers(VulkanContext& Context);
-	bool CreateCommandPool(VulkanContext& Context);
-	bool AllocateCommandBuffers(VulkanContext& Context);
-	bool CreateSyncObjects(VulkanContext& Context);
-	bool CleanUpContext(VulkanContext& Context);
+	bool CreateLogicalDevice();
+	bool CreateSwapChain();
+	bool CreateOffscreenTarget(uint32_t Width, uint32_t Height);
+	bool CreateOffScreenRenderPass();
+	bool CreateSwapChainRenderPass();
+	bool CreateFrameBuffers();
+	bool CreateCommandPool();
+	bool AllocateCommandBuffers();
+	bool CreateSyncObjects();
+	bool CleanUpContext();
+
+	//Cleanups
+	void DestoryOffscreenTarget();
+	void DestorySwapChain();
+	void DestoryCommandPool();
+	void DestorySyncObjects();
 
 	// Helpers
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice Device, VkSurfaceKHR Surface);
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice Device);
 	bool CheckValidationLayers();
+	uint32_t FindMemoryType(VkPhysicalDevice PhysicalDevice, uint32_t TypeFilter, VkMemoryPropertyFlags Properties);
 private:
 	VulkanContext m_VulkanContext;
 	// Device extensions we require. Every device must support these.
