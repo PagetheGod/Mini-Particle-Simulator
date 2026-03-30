@@ -1,4 +1,8 @@
-﻿#pragma once
+//
+// Created by YWvin on 2026/3/29.
+//
+
+#pragma once
 
 #include <vulkan/vulkan.h>
 #include <SDL3/SDL.h>
@@ -17,9 +21,8 @@ const std::vector<const char*> VALIDATION_LAYERS = {
 
 
 /* Helper: Find queue families for a physical device
- * Returns true if the device has all queue families we need.
- * Fills in the family indices in the context.
- */
+/* Returns true if the device has all queue families we need.
+/* Fills in the family indices in the context. */
 struct QueueFamilyIndices
 {
 	uint32_t GraphicsFamily = UINT32_MAX;
@@ -40,17 +43,17 @@ struct PushConstantType
 	float Padding2;
 };
 
-// This class will manage vulkan side bussiness
+// This class encapsulates all Vulkan-specific behaviors:
 // Initializing vulkan, loading shaders, issuing draw calls, etc.
-class HardwareRenderer
+class VulkanManager
 {
 public:
-    HardwareRenderer();
-    HardwareRenderer(const HardwareRenderer&) = delete;
-    HardwareRenderer& operator=(const HardwareRenderer&) = delete;
-    HardwareRenderer(HardwareRenderer&& ) = delete;
-    HardwareRenderer& operator=(HardwareRenderer&&) = delete;
-    ~HardwareRenderer();
+    VulkanManager();
+    VulkanManager(const VulkanManager&) = delete;
+    VulkanManager& operator=(const VulkanManager&) = delete;
+    VulkanManager(VulkanManager&& ) = delete;
+    VulkanManager& operator=(VulkanManager&&) = delete;
+    ~VulkanManager();
 
     // Actual work functions
     bool Initialize();
@@ -58,10 +61,10 @@ public:
 
 public:
     /* Offscreen render target for supersampled particle rendering
-     * Particles rendered directly to swapchain images.
-     * Now particles render to this 2560×1440 image, then get blitted to
-     * the viewport region of the swapchain.
-     */
+    /* Particles rendered directly to swapchain images.
+    /* Now particles render to this 2560×1440 image, then get blitted to
+    /* the viewport region of the swapchain.
+    */
     struct OffscreenTarget
     {
         VkImage VkImage = nullptr; // Similar to DX11Texture2D
@@ -102,7 +105,6 @@ public:
 		VkFormat SwapChainFormat = VK_FORMAT_UNDEFINED;// Same stuffs as the DX11 formats(DXGI_FORMAT_XXX)
 		VkExtent2D SwapChainExtent = { 0, 0 };
 		std::vector<VkImage> SwapChainImages;
-		std::vector<VkFramebuffer> SwapChainFramebuffers;
 		std::vector<VkImageView> SwapChainImageViews;// Yes it's view, does what it says
 
 		// Offscreen render target

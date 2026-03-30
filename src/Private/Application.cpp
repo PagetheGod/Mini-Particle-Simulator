@@ -2,23 +2,26 @@
 // Created by YWvin on 2026/3/23.
 //
 
-//Dependencies and STL
+//External libs and STL
 #include <iostream>
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_vulkan.h"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
-
-//External libs and STL
 #include <format>
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_timer.h"
-
+#include <functional>
 //Own headers
 #include "Application.hpp"
+#include "HardwareRenderer.hpp"
 #include "Commons.hpp"
-Application::Application() : m_Window(nullptr), m_RendererType(RendererType::Software), m_SoftwareRenderer(nullptr)
+#include "UIManager.hpp"
+#include "ParticleManager.hpp"
+Application::Application() : m_Window(nullptr), m_RendererType(RendererType::Software),
+m_SoftwareRenderer(nullptr), m_HardwareRenderer(nullptr), m_UIManager(nullptr), m_ParticleManager(nullptr),
+m_InputManager(InputManager())
 {
 
 }
@@ -64,172 +67,49 @@ bool Application::Initialize() {
 		SDL_DestroyWindow(m_Window);
 		return Result;
 	}
-
 	if (!ShowStartupDialog())
 	{
 		return false;
 	}
+	// Init UI manager
+	m_UIManager = std::make_unique<UIManager>([this](const bool SetLoopEnable)
+	{
+		this->m_ShouldLoop = SetLoopEnable;
+	});
     return true;
 }
 
-bool Application::Frame()
+bool Application::Frame(float DeltaTime, const InputResult& Input)
 {
-    //SDL Version of App main event loop
-	bool Running = true;
-	bool Paused = false;
-	bool IsLMBPressed = false;
-	uint64_t LastNs = SDL_GetTicksNS();
-	float DeltaTime = 0.f;
-
-	//FPS Counter
+	// FPS Counter
 	int FrameCount = 0;
 	float FPSTimer = 0.f;
+	//Fps counter
+	FrameCount++;
+	FPSTimer += DeltaTime;
 
+	ParticleSimulatorConfig ParticleConfig;
+	m_UIManager->UIFrame(FPS)
 
-	while (Running)
+	if (FPSTimer >= 1.0)
 	{
-
-		DeltaTime = GetDeltaTime(LastNs);
-
-		//Fps counter
-		FrameCount++;
-		FPSTimer += DeltaTime;
-
-		if (FPSTimer >= 1.0)
-		{
-			std::string FPSTitle = std::format("FPS: {} (dt: {:.2f}ms)", FrameCount, DeltaTime * 1000.0);
-			SDL_SetWindowTitle(m_Window, FPSTitle.data());
-			FrameCount = 0;
-			FPSTimer -= 1.0;
-		}
-
-		SDL_Event Event;
-
-		//Poll event does not block. It just checks message queue and returns right away regardless of presence of events
-		while (SDL_PollEvent(&Event))
-		{
-			switch (Event.type)
-			{
-				case SDL_EVENT_QUIT:
-				{
-					Running = false;
-					break;
-				}
-				//Event.key will contain a kb data
-				//key.key is the key code
-				//key.mod is the modifier state(Shift, Alt, Ctrl)
-				//key.repeat is this is a key-repeat event
-				case SDL_EVENT_KEY_DOWN:
-				{
-					//For now we ignore repeats, which is sent when user hold down the keys
-					if (Event.key.repeat)
-					{
-						break;
-					}
-					switch (Event.key.key)
-					{
-					case SDLK_ESCAPE:
-					{
-						Running = false;
-						break;
-					}
-					case SDLK_SPACE:
-					{
-						Paused = !Paused;
-						std::cout << "Pause status: " << Paused << '\n';
-						break;
-					}
-					case SDLK_F11:
-					{
-						//Toggle fullscreen, SDL_GetWindowFlags() return a bunch of flags, bitwise and to get the fullscreen flag
-						uint64_t Flags = SDL_GetWindowFlags(Window);
-						bool IsFullScreen = Flags & SDL_WINDOW_FULLSCREEN;
-						SDL_SetWindowFullscreen(Window, !IsFullScreen);
-						std::cout << "Fullscreen status: " << IsFullScreen << '\n';
-						break;
-					}
-					default:
-						break;
-					}
-					break;
-				}
-				//Event.button contains mouse data
-				//button.button contains which button, 1 = left, 2 = mid, 3 = right
-				//button.x/y is the click position
-				case SDL_EVENT_MOUSE_BUTTON_DOWN:
-				{
-					if (Event.button.button == SDL_BUTTON_LEFT)
-					{
-						IsLMBPressed = true;
-						std::cout << "Left click at: (" << Event.button.x << ", " << Event.button.y << ")" << '\n';
-					}
-					else if (Event.button.button == SDL_BUTTON_RIGHT)
-					{
-						std::cout << "Right click at: (" << Event.button.x << ", " << Event.button.y << ")" << '\n';
-					}
-					break;
-				}
-				case SDL_EVENT_MOUSE_BUTTON_UP:
-				{
-					if (Event.button.button == SDL_BUTTON_LEFT)
-					{
-						IsLMBPressed = false;
-					}
-					break;
-				}
-				case SDL_EVENT_MOUSE_WHEEL:
-				{
-					// Scroll wheel. event.wheel.y is the scroll amount.
-					// Positive = scroll up, negative = scroll down.
-					// Useful for zooming the camera.
-					if (Event.wheel.y != 0.0f)
-					{
-						std::printf("Scroll: %.1f\n", Event.wheel.y);
-					}
-					break;
-				}
-
-
-				//Mouse movement. Its event data stores both current pos and delta since LAST EVENT
-				case SDL_EVENT_MOUSE_MOTION:
-				{
-					if (IsLMBPressed)
-					{
-						std::cout << "Dragged activated!" << '\n';
-					}
-					break;
-				}
-				//Event.window has the window data, 1 for width and 2 for height
-				case SDL_EVENT_WINDOW_RESIZED:
-				{
-					int NewWidth = Event.window.data1;
-					int NewHeight = Event.window.data2;
-					std::cout << "Window Resized, width and height are: " << NewWidth << " and " << NewHeight << '\n';
-					//Note if our window is resized we HAVE TO recreate vulkan swap chain
-					break;
-				}
-				case SDL_EVENT_WINDOW_MINIMIZED:
-				{
-					//Stop rendering when we are minimized
-					std::cout << "Window Minimized!" << '\n';
-					break;
-				}
-				case SDL_EVENT_WINDOW_RESTORED:
-				{
-					//Window got restored from a minimized state
-					std::cout << "Window Restored!" << '\n';
-					break;
-				}
-			}
-		}
-		uint64_t FrameEndNs = SDL_GetTicksNS();
-		uint64_t FrameDurationNs = FrameEndNs - CurrentNs;
-		Uint64 TargetNs = 16666667;  // 1/60 second in nanoseconds
-		if (FrameDurationNs < TargetNs)
-		{
-			SDL_DelayPrecise(TargetNs - FrameDurationNs);
-		}
+		std::string FPSTitle = std::format("FPS: {} (dt: {:.2f}ms)", FrameCount, DeltaTime * 1000.0);
+		SDL_SetWindowTitle(m_Window, FPSTitle.data());
+		FrameCount = 0;
+		FPSTimer -= 1.0;
 	}
+
+	/*
+	 * Frame flow:
+	 * 1. Update FPS number
+	 * 2. Check if settings panel is collapsed, if it's, set the state in UIManager and update camera look at
+	 * 3. Call UIFrame(), this will update the UI and take care panel collapse/expansion
+	 * 4. Check if user did camera orbiting, if they did, update camera position and orientation
+	 * 5. Call ParticleFrame(), this will both spawn and update the particles
+	 * 6. Call RenderFrame(), passing it the camera object so the renderer has access to up-to-date view and projection matrix
+	 */
+
+
 }
 
 bool Application::ShowStartupDialog()
@@ -376,9 +256,6 @@ bool Application::ShowStartupDialog()
 	SDL_DestroyRenderer(Renderer);
 	return true;
 }
-
-
-
 float Application::GetDeltaTime(uint64_t& LastNs)
 {
 	float DeltaTime = 0.f;
@@ -396,3 +273,30 @@ float Application::GetDeltaTime(uint64_t& LastNs)
 
 	return DeltaTime;
 }
+
+void Application::Run()
+{
+	bool Running = true;
+	uint64_t LastNs = SDL_GetTicksNS();
+	while (Running)
+	{
+		const float DeltaTime = GetDeltaTime(LastNs);
+		InputResult Result = m_InputManager.ProcessInput(m_UIManager->IsPanelOpen());
+		if (Result.Event == InputEvent::Quit)
+		{
+			Running = false;
+			break;
+		}
+		// Toggle pause
+		if (Result.Event == InputEvent::TogglePause)
+		{
+			m_Paused = !m_Paused;
+		}
+		if (m_Paused)
+		{
+			continue;
+		}
+		Frame(DeltaTime, Result);
+	}
+}
+

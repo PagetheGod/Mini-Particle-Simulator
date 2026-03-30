@@ -1,4 +1,4 @@
-﻿
+
 #include <algorithm>
 #include <SDL3/SDL_vulkan.h>
 #include <cstdio>
@@ -10,24 +10,24 @@
 #include <fstream>
 
 // Own headers
-#include "HardwareRenderer.hpp"
+#include "VulkanManager.hpp"
 
 #include "imgui_impl_vulkan.h"
 
-HardwareRenderer::HardwareRenderer(){
+VulkanManager::VulkanManager(){
 }
 
-HardwareRenderer::~HardwareRenderer() {
+VulkanManager::~VulkanManager() {
 }
 
-bool HardwareRenderer::Initialize()
+bool VulkanManager::Initialize()
 {
     return true;
 }
 
 
 
-bool HardwareRenderer::CreateInstance()
+bool VulkanManager::CreateInstance()
 {
     // Step 1: Check validation layer support
     if (ENABLE_VALIDATION_LAYERS && !CheckValidationLayers())
@@ -139,7 +139,7 @@ bool HardwareRenderer::CreateInstance()
  * It's not part of the Vulkan core, so we can't call it directly.
  * We need to look it up via vkGetInstanceProcAddr. */
 
-bool HardwareRenderer::SetupDebugMessenger()
+bool VulkanManager::SetupDebugMessenger()
 {
     if constexpr (!ENABLE_VALIDATION_LAYERS)
     {
@@ -179,7 +179,7 @@ bool HardwareRenderer::SetupDebugMessenger()
     return true;
 }
 
-bool HardwareRenderer::CreateSurface()
+bool VulkanManager::CreateSurface()
 {
     /* SDL3 creates the platform-specific Vulkan surface for us.
      * On Windows, this creates a VkWin32SurfaceKHR internally.
@@ -198,7 +198,7 @@ bool HardwareRenderer::CreateSurface()
     return true;
 }
 
-bool HardwareRenderer::CheckBlitSupport(VkPhysicalDevice Device, VkFormat Format)
+bool VulkanManager::CheckBlitSupport(VkPhysicalDevice Device, VkFormat Format)
 {
     VkFormatProperties Props;
     vkGetPhysicalDeviceFormatProperties(Device, Format, &Props);
@@ -218,7 +218,7 @@ bool HardwareRenderer::CheckBlitSupport(VkPhysicalDevice Device, VkFormat Format
     return IsDestSupported && IsSrcSupported;
 }
 
-uint32_t HardwareRenderer::RatePhysicalDevices(VkPhysicalDevice Device, VkSurfaceKHR&Surface)
+uint32_t VulkanManager::RatePhysicalDevices(VkPhysicalDevice Device, VkSurfaceKHR&Surface)
 {
     QueueFamilyIndices Indices = FindQueueFamilies(Device, Surface);
     if (!Indices.IsComplete())
@@ -259,7 +259,7 @@ uint32_t HardwareRenderer::RatePhysicalDevices(VkPhysicalDevice Device, VkSurfac
  * A phsysical device refers to our GPU
  * We just pick the best one that supports vulkan 1.4
  */
-bool HardwareRenderer::PickPhysicalDevice()
+bool VulkanManager::PickPhysicalDevice()
 {
     uint32_t DeviceCount = 0;
     vkEnumeratePhysicalDevices(m_VulkanContext.VulkanInstance, &DeviceCount, nullptr);
@@ -308,7 +308,7 @@ bool HardwareRenderer::PickPhysicalDevice()
     return true;
 }
 
-bool HardwareRenderer::CreateLogicalDevice()
+bool VulkanManager::CreateLogicalDevice()
 {
     std::set<uint32_t> UniqueFamilies = {m_VulkanContext.GraphicsFamily, m_VulkanContext.PresentFamily, m_VulkanContext.ComputeFamily};
     std::vector<VkDeviceQueueCreateInfo> QueueCreateInfos;
@@ -395,7 +395,7 @@ bool HardwareRenderer::CreateLogicalDevice()
 }
 
 
-bool HardwareRenderer::CreateSwapChain()
+bool VulkanManager::CreateSwapChain()
 {
     VkSurfaceCapabilitiesKHR Capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_VulkanContext.VulkanPhysicalDevice, m_VulkanContext.VulkanSurface, &Capabilities);
@@ -537,7 +537,7 @@ bool HardwareRenderer::CreateSwapChain()
 
 }
 
-bool HardwareRenderer::CreateOffscreenTarget(uint32_t Width, uint32_t Height) {
+bool VulkanManager::CreateOffscreenTarget(uint32_t Width, uint32_t Height) {
     m_VulkanContext.OffScreen.Width = Width;
     m_VulkanContext.OffScreen.Height = Height;
 
@@ -625,7 +625,7 @@ bool HardwareRenderer::CreateOffscreenTarget(uint32_t Width, uint32_t Height) {
     return true;
 }
 
-bool HardwareRenderer::CreateOffScreenRenderPass()
+bool VulkanManager::CreateOffScreenRenderPass()
 {
     // Man I miss when I can just OMSetRenderTarget() + Draw() in DX11
     // Like what do you mean I have to set up the target AND the entire pass object
@@ -696,11 +696,10 @@ bool HardwareRenderer::CreateOffScreenRenderPass()
         std::cerr << "Failed to create offscreen render pass!" << '\n';
         return false;
     }
-
     return true;
 }
 
-bool HardwareRenderer::CreateSwapChainRenderPass()
+bool VulkanManager::CreateSwapChainRenderPass()
 {
     VkAttachmentDescription ColorAttachmentDesc = {};
     ColorAttachmentDesc.format = m_VulkanContext.SwapChainFormat;
@@ -751,7 +750,7 @@ bool HardwareRenderer::CreateSwapChainRenderPass()
     return true;
 }
 
-bool HardwareRenderer::CreateFrameBuffers()
+bool VulkanManager::CreateFrameBuffers()
 {
     m_VulkanContext.FrameBuffers.resize(m_VulkanContext.SwapChainImages.size());
     for (size_t i = 0; i < m_VulkanContext.SwapChainImages.size(); i++)
@@ -778,7 +777,7 @@ bool HardwareRenderer::CreateFrameBuffers()
     return true;
 }
 
-bool HardwareRenderer::CreateGraphicsPipeline()
+bool VulkanManager::CreateGraphicsPipeline()
 {
     std::vector<char> VertexShaderBuffer;
     std::vector<char> FragmentShaderBuffer;
@@ -826,9 +825,9 @@ bool HardwareRenderer::CreateGraphicsPipeline()
     VertexBindingDescriptions[0].binding = 0; // Slot 0, this refers to the POSITION0 in HLSL
     VertexBindingDescriptions[0].stride = sizeof(float) * 2; // Size of the data in POSITION0, which is a float2
     VertexBindingDescriptions[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    // Instance data, binding starts at slot 1, contains instance position, color, and size = 2 + 4 + 1 = 7 floats
+    // Instance data, binding starts at slot 1, contains instance position, color, and size = 3 + 4 + 1 = 8 floats
     VertexBindingDescriptions[1].binding = 1;
-    VertexBindingDescriptions[1].stride = sizeof(float) * 7;
+    VertexBindingDescriptions[1].stride = sizeof(float) * 8;
     VertexBindingDescriptions[1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
 
     VkVertexInputAttributeDescription AttributeDescriptions[4] = {};
@@ -840,18 +839,18 @@ bool HardwareRenderer::CreateGraphicsPipeline()
     // Instance position
     AttributeDescriptions[1].location = 1;
     AttributeDescriptions[1].binding = 1;
-    AttributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT; // Instance position, the center of the particle quad
+    AttributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // Instance position, the center of the particle quad
     AttributeDescriptions[1].offset = 0; // We are the first at OUR BINDING slot, no offset needed
     // Instance color
     AttributeDescriptions[2].location = 2;
     AttributeDescriptions[2].binding = 1;
     AttributeDescriptions[2].format = VK_FORMAT_R32G32B32A32_SFLOAT; // Instance color, four floats
-    AttributeDescriptions[2].offset = sizeof(float) * 2; // Jump over the instance position float2
+    AttributeDescriptions[2].offset = sizeof(float) * 3; // Jump over the instance position float3
     // Instance size
     AttributeDescriptions[3].location = 3;
     AttributeDescriptions[3].binding = 1;
     AttributeDescriptions[3].format = VK_FORMAT_R32_SFLOAT;
-    AttributeDescriptions[3].offset = sizeof(float) * 6; // Jump over a float2 and a float4
+    AttributeDescriptions[3].offset = sizeof(float) * 7; // Jump over a float3 and a float4
 
     VkPipelineVertexInputStateCreateInfo VertexInputStateCreateInfo = {};
     VertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -959,7 +958,7 @@ bool HardwareRenderer::CreateGraphicsPipeline()
     return true;
 }
 
-bool HardwareRenderer::CreateCommandPool()
+bool VulkanManager::CreateCommandPool()
 {
     // A
     VkCommandPoolCreateInfo CommandPoolCreateInfo = {};
@@ -976,7 +975,7 @@ bool HardwareRenderer::CreateCommandPool()
     return true;
 }
 
-bool HardwareRenderer::AllocateCommandBuffers()
+bool VulkanManager::AllocateCommandBuffers()
 {
     /*
      * A command buffer is well... where all of our commands to the GPU gets stored
@@ -984,7 +983,7 @@ bool HardwareRenderer::AllocateCommandBuffers()
      * such as D3D11Device and D3D11DeviceContext
      * DX12 and Vulkan requires us to be explicit and submit every command ourself
      */
-    m_VulkanContext.CommandBuffers.resize(HardwareRenderer::VulkanContext::MAX_FRAMES_IN_FLIGHT);
+    m_VulkanContext.CommandBuffers.resize(VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT);
     VkCommandBufferAllocateInfo CommandBufferAllocateInfo = {};
     CommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     CommandBufferAllocateInfo.commandPool = m_VulkanContext.CommandPool;
@@ -1000,11 +999,11 @@ bool HardwareRenderer::AllocateCommandBuffers()
     return true;
 }
 
-bool HardwareRenderer::CreateSyncObjects() {
+bool VulkanManager::CreateSyncObjects() {
     // These are similar to mutexes we learned in class
-    m_VulkanContext.ImageAvailableSemaphores.resize(HardwareRenderer::VulkanContext::MAX_FRAMES_IN_FLIGHT);
-    m_VulkanContext.RenderFinishedSemaphores.resize(HardwareRenderer::VulkanContext::MAX_FRAMES_IN_FLIGHT);
-    m_VulkanContext.InFlightFence.resize(HardwareRenderer::VulkanContext::MAX_FRAMES_IN_FLIGHT);
+    m_VulkanContext.ImageAvailableSemaphores.resize(VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT);
+    m_VulkanContext.RenderFinishedSemaphores.resize(VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT);
+    m_VulkanContext.InFlightFence.resize(VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT);
 
     VkSemaphoreCreateInfo SemaphoreCreateInfo = {};
     SemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1014,7 +1013,7 @@ bool HardwareRenderer::CreateSyncObjects() {
     FenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
     VkResult Result;
-    for (uint32_t i = 0; i < HardwareRenderer::VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
     {
         Result = vkCreateSemaphore(m_VulkanContext.VulkanDevice, &SemaphoreCreateInfo,
             nullptr, &m_VulkanContext.ImageAvailableSemaphores[i]);
@@ -1041,12 +1040,12 @@ bool HardwareRenderer::CreateSyncObjects() {
     return true;
 }
 
-bool HardwareRenderer::CleanUpContext()
+bool VulkanManager::CleanUpContext()
 {
     return false;
 }
 
-void HardwareRenderer::DestoryOffscreenTarget()
+void VulkanManager::DestoryOffscreenTarget()
 {
     // The clean up of the offscreen target HAS To be done in this order
     // Otherwise vulkan flips out and app goes boom
@@ -1075,7 +1074,7 @@ void HardwareRenderer::DestoryOffscreenTarget()
 }
 
 
-QueueFamilyIndices HardwareRenderer::FindQueueFamilies(VkPhysicalDevice Device, VkSurfaceKHR Surface)
+QueueFamilyIndices VulkanManager::FindQueueFamilies(VkPhysicalDevice Device, VkSurfaceKHR Surface)
 {
     QueueFamilyIndices Indices;
 
@@ -1129,7 +1128,7 @@ QueueFamilyIndices HardwareRenderer::FindQueueFamilies(VkPhysicalDevice Device, 
 }
 
 // Helper: Check if a device supports all required extensions
-bool HardwareRenderer::CheckDeviceExtensionSupport(VkPhysicalDevice Device)
+bool VulkanManager::CheckDeviceExtensionSupport(VkPhysicalDevice Device)
 {
     uint32_t ExtCount = 0;
     vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtCount, nullptr);
@@ -1159,7 +1158,7 @@ bool HardwareRenderer::CheckDeviceExtensionSupport(VkPhysicalDevice Device)
  * The Vulkan SDK installs validation layers on your system, but they might
  * not be present on a user's machine (they don't ship with GPU drivers).
  * This function checks before we try to enable them. */
-bool HardwareRenderer::CheckValidationLayers()
+bool VulkanManager::CheckValidationLayers()
 {
     //Query the number of available layers
     uint32_t LayerCount = 0;
@@ -1191,7 +1190,7 @@ bool HardwareRenderer::CheckValidationLayers()
     return true;
 }
 
-uint32_t HardwareRenderer::FindMemoryType(VkPhysicalDevice PhysicalDevice, uint32_t TypeFilter,
+uint32_t VulkanManager::FindMemoryType(VkPhysicalDevice PhysicalDevice, uint32_t TypeFilter,
     VkMemoryPropertyFlags Properties)
 {
     // This function gets athe memory types supported by our gpu
@@ -1212,7 +1211,7 @@ uint32_t HardwareRenderer::FindMemoryType(VkPhysicalDevice PhysicalDevice, uint3
     return UINT32_MAX;
 }
 
-bool HardwareRenderer::ReadCompiledShader(const std::string &ShaderBinaryPath, std::vector<char>& OutShaderBuffer)
+bool VulkanManager::ReadCompiledShader(const std::string &ShaderBinaryPath, std::vector<char>& OutShaderBuffer)
 {
     // Start our stream at the end of the file, so we can tell how big the file is
     std::ifstream ShaderFileIn(ShaderBinaryPath, std::ios::ate | std::ios::binary);
@@ -1233,7 +1232,7 @@ bool HardwareRenderer::ReadCompiledShader(const std::string &ShaderBinaryPath, s
 
 }
 
-bool HardwareRenderer::CreateShaderModule(const std::vector<char>& InShaderBuffer, VkShaderModule& OutShaderModule)
+bool VulkanManager::CreateShaderModule(const std::vector<char>& InShaderBuffer, VkShaderModule& OutShaderModule)
 {
     VkShaderModuleCreateInfo ShaderModuleCreateInfo = {};
     ShaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1251,7 +1250,7 @@ bool HardwareRenderer::CreateShaderModule(const std::vector<char>& InShaderBuffe
     return true;
 }
 
-void HardwareRenderer::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t ImageIndex,
+void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t ImageIndex,
     uint32_t InstanceCount, VkBuffer VertexBuffer, VkBuffer InstanceBuffer, const PushConstantType &PushConstantData,
     const Commons::Layout::ViewportRect& Viewport)
 {
@@ -1390,17 +1389,14 @@ void HardwareRenderer::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, u
     // =====================================================================
     // PASS B: ImGui → Swapchain (1920×1080)
     // =====================================================================
-    // [CHANGED from v1] In v1, ImGui rendered inside the same pass as
-    // particles. Now it has its own pass with loadOp=LOAD that preserves
-    // the blitted particle image.
     VkRenderPassBeginInfo RenderPassBeginInfo_B = {};
-    RenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    RenderPassBeginInfo.renderPass = m_VulkanContext.SwapChainRenderPass;
-    RenderPassBeginInfo.framebuffer = m_VulkanContext.[ImageIndex];
-    RenderPassBeginInfo.renderArea.offset = {0, 0};
-    RenderPassBeginInfo.renderArea.extent = m_VulkanContext.SwapChainExtent;
-    RenderPassBeginInfo.clearValueCount = 0; // Remember we are NOT clearing the entire swapchain(which contains our imgui UI!)
-    RenderPassBeginInfo.pClearValues = nullptr;
+    RenderPassBeginInfo_B.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    RenderPassBeginInfo_B.renderPass = m_VulkanContext.SwapChainRenderPass;
+    RenderPassBeginInfo_B.framebuffer = m_VulkanContext.FrameBuffers[ImageIndex];
+    RenderPassBeginInfo_B.renderArea.offset = {0, 0};
+    RenderPassBeginInfo_B.renderArea.extent = m_VulkanContext.SwapChainExtent;
+    RenderPassBeginInfo_B.clearValueCount = 0; // Remember we are NOT clearing the entire swapchain(which contains our imgui UI!)
+    RenderPassBeginInfo_B.pClearValues = nullptr;
 
     vkCmdBeginRenderPass(CommandBuffer, &RenderPassBeginInfo_B, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -1465,5 +1461,3 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
 
     return VK_FALSE;
 }
-
-

@@ -123,4 +123,20 @@ void SoftwareRenderer::EndFrame()
     SDL_RenderPresent(m_Renderer);
 }
 
+bool SoftwareRenderer::CreateGaussianGlowTexture(int Diameter) {
+    // Create a CPU-side surface to fill pixel by pixel
+    SDL_Surface* Surface = SDL_CreateSurface(Diameter, Diameter, SDL_PIXELFORMAT_RGBA8888);
+    if (!Surface)
+    {
+        std::cerr << "Failed to create SDL_Surface: " << SDL_GetError() << std::endl;
+        return false;
+    }
+
+    float Center = Diameter / 2.f;
+    float Sigma = Diameter / 4.5;
+    float TwoSigmaSquare = Sigma * Sigma * 2.f;
+
+
+}
+
 

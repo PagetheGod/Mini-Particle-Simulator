@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 #include <string>
-
+#include <cstdint>
 namespace Commons
 {
     namespace Utility
@@ -13,19 +13,23 @@ namespace Commons
         static constexpr const char* WINDOW_TITLE = "Mini Particle Simulator";
 
         /*
-        /* Timing constants
-        /* ---------------------------------------------------------------------------
-        /* We cap delta time to prevent the "spiral of death" — if the app freezes
-        /* for 2 seconds (e.g., breakpoint in debugger, OS stall), the next frame
-        /* would get dt=2.0. Physics would explode because particles would try to
-        /* move 2 seconds' worth of distance in one step, potentially tunneling
-        /* through colliders or flying off to infinity.
-        /* By capping dt, we accept that the simulation will run in slow-motion
-        /* during stalls rather than producing garbage.
+         * Timing constants
+         * ---------------------------------------------------------------------------
+         * We cap delta time to prevent the "spiral of death" — if the app freezes
+         * for 2 seconds (e.g., breakpoint in debugger, OS stall), the next frame
+         * would get dt=2.0. Physics would explode because particles would try to
+         * move 2 seconds' worth of distance in one step, potentially tunneling
+         * through colliders or flying off to infinity.
+         * By capping dt, we accept that the simulation will run in slow-motion
+         * during stalls rather than producing garbage.
          */
         static constexpr double MAX_DELTA_TIME = 1.0 / 15.0;  // ~66.7ms cap
-        //Nanoseconds per second — for converting SDL_GetTicksNS() to seconds.
+        // Nanoseconds per second — for converting SDL_GetTicksNS() to seconds.
         static constexpr double NS_PER_SECOND = 1'000'000'000.0;
+        // Max number of forces we can have other than gravity
+        static constexpr uint8_t MAX_NUM_FORCES = 9;
+        // Gravity!!!
+        static constexpr float GRAVITY = 9.81f;
     }
     namespace Layout
     {

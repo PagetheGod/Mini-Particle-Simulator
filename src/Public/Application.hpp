@@ -1,6 +1,8 @@
 ﻿#pragma once
 #include "SDL3/SDL_video.h"
 #include <memory>
+
+#include "InputManager.hpp"
 #include "SoftwareRenderer.hpp"
 
 /*
@@ -10,13 +12,28 @@
 * 3. Initialize thread pool, fill the particle object pool
 */
 
-enum class RendererType
+class ParticleManager;
+class HardwareRenderer;
+class UIManager;
+
+enum class RendererType : uint8_t
 {
     Software,
     Hardware
 };
 
-
+/*
+ * Enum to help us transition between different states in the application
+ * Emitting: the emitter is still spawning particles, this is only really relevant to a continuous emitter
+ * Fading: the emitter had stopped spawning particles, but there are still live particles to render
+ * Stopped: either particles had all died out, or the user paused the playback
+ */
+enum class PlaybackState : uint8_t
+{
+    Emitting,
+    Fading,
+    Stopped
+};
 
 class Application {
 public:
@@ -29,7 +46,8 @@ public:
 
     //Init and frame function
     bool Initialize();
-    bool Frame();
+    void Run();
+    bool Frame(float DeltaTime, const InputResult& Input);
 
 // Separate access modifiers to help organize functions and variables
 public:
@@ -42,7 +60,6 @@ private:
     bool ShowStartupDialog();
 
 
-
     // Get delta time
     float GetDeltaTime(uint64_t& LastNs);
     // Poll application events, this includes inputs, quit, and resizing(optional)
@@ -51,11 +68,19 @@ private:
     SDL_Window* m_Window;
     RendererType m_RendererType;
     std::unique_ptr<SoftwareRenderer> m_SoftwareRenderer;
-
+    std::unique_ptr<HardwareRenderer> m_HardwareRenderer;
+    std::unique_ptr<UIManager> m_UIManager;
+    std::unique_ptr<ParticleManager> m_ParticleManager;
+    InputManager m_InputManager;
     //States
     bool m_Running = false;
     bool m_Paused = false;
+    bool m_IsLMBPressed = false;
     bool m_IsPanelOpen = true;
+    bool m_ShouldLoop = true;
+    PlaybackState m_PlaybackState = PlaybackState::Stopped;
+    float m_EmitterLifeTime = 0.f;
+    bool m_IsConfigDirty = false;
 };
 
 
