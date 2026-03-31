@@ -120,27 +120,56 @@ struct ParticleSimulatorConfig
     bool IsRandomScale = false;
     bool IsRandomSpeed = true;
 };
-
-union SizeOrNext
+/* SIMD has strict alignment requirements, namely pointers we pass got to be aligned to 16-byte
+ * Otherwise it would slower, though I am not sure how much slower that would be
+ * But this is a good chance to search and learn online
+ * Look what I have found, std::aligned_alloc(), a function that allocates memory with specified alignment
+ * Although using this means we can't just delete[] anymore, need to call std::free() on POSIX
+ * And _aligned_free() on Windows
+ *
+ * Also, fun thing I learend, despite being called a custom "deleter", the second template argument to unique_ptr
+ * is literally a struct(in popular implementations) that contains a function that free your memory
+ */
+// In our case it's guaranteed to be a float, so just using float ptr here
+struct AlignedDeleter
 {
-    float Size;
-    uint32_t NextFreeSlot;
+    // Strange, why is this const?
+    void operator()(float* Block) const
+    {
+    #ifdef _WIN32
+        // Windows uses this aligned free function
+        _aligned_free(Block);
+    #else
+        // POSIX acts like normal human beings
+        std::free(Block);
+    #endif
+    }
 };
 
+// I got tired of typing that chaotic blob on the right
+// So here is an alias
+using AlignedArray = std::unique_ptr<float[], AlignedDeleter>;
+
+
+// Using vectors here is also fine. But since we initialize it to the max possible particle count
+// And we don't resize, use iterator... or any of the vector utilities
+// Therefore, no need for vectors
 struct ParticleStates
 {
-    std::vector<float> Px;
-    std::vector<float> Py;
-    std::vector<float> Pz;
-    std::vector<float> Vx;
-    std::vector<float> Vy;
-    std::vector<float> Vz;
-    std::vector<float> R;
-    std::vector<float> G;
-    std::vector<float> B;
-    std::vector<SizeOrNext> SizeOrNextFree;
-    std::vector<float> LifeTime;
-    uint32_t FirstAvailable;
+    AlignedArray Px;
+    AlignedArray Py;
+    AlignedArray Pz;
+    AlignedArray Vx;
+    AlignedArray Vy;
+    AlignedArray Vz;
+    AlignedArray R;
+    AlignedArray G;
+    AlignedArray B;
+    AlignedArray Size;
+    AlignedArray LifeTime;
+    // Almost forgot, we need this to for color scaling
+    // We do this by using LifeTime / MaxLifeTime ratio to lerp
+    AlignedArray MaxLifeTime;
 };
 
 
@@ -176,7 +205,8 @@ public:
 public:
 
 private:
-
+    // Helper to create a float array aligned to specified boundary
+    AlignedArray AllocateAlignedArray(size_t NumElements, size_t Alignment);
 private:
     ParticleStates m_ParticleStates;
     std::unique_ptr<VThreadPool> m_VThreadPool;
@@ -185,7 +215,7 @@ private:
     glm::vec3 m_EmitterPosition = glm::vec3(0.f);
 
     // Constants
-    static constexpr uint32_t NUM_MAX_PARTICLES = 100000;
+    static constexpr uint32_t NUM_MAX_PARTICLES = 65000;
     static constexpr uint32_t NUM_THREADS_USED = 16;
 };
 
