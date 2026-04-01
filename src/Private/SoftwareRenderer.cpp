@@ -11,6 +11,7 @@
 //Own headers
 #include "SoftwareRenderer.hpp"
 #include "Commons.hpp"
+#include "glm/exponential.hpp"
 
 
 SoftwareRenderer::SoftwareRenderer() : m_Renderer(nullptr), m_Window(nullptr)
@@ -33,17 +34,19 @@ SoftwareRenderer::~SoftwareRenderer()
 
 bool SoftwareRenderer::Initialize(SDL_Window* Window)
 {
-    // ── Create the SDL_Renderer ──
-    // SDL_CreateRenderer picks the best available backend automatically:
-    // On Windows is DX11/12
-    // On MacOS is Metal
-    // On Linux is OpenGL
-    // Despite using GPU-accelerated compositing, the PARTICLE RENDERING
-    // is still CPU-based (SDL_RenderPoint / SDL_RenderGeometry).
-    // ImGui rendering is handled by the SDL_Renderer too.
+    /* Create the SDL_Renderer ──
+     * SDL_CreateRenderer picks the best available backend automatically:
+     * On Windows is DX11/12
+     * On MacOS is Metal
+     * On Linux is OpenGL
+     * Despite using GPU-accelerated compositing, the PARTICLE RENDERING
+     * is still CPU-based (SDL_RenderPoint / SDL_RenderGeometry).
+     * ImGui rendering is handled by the SDL_Renderer too.
+     */
     m_Window = Window;
     m_Renderer = SDL_CreateRenderer(m_Window, nullptr);
     SDL_SetRenderVSync(m_Renderer, 1);
+
     if (!m_Renderer)
     {
         std::cerr << "Failed to create SDL_Renderer: " << SDL_GetError() << std::endl;
@@ -63,11 +66,17 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     // The SDLRenderer3 backend handles rendering ImGui's draw lists.
     ImGui_ImplSDL3_InitForSDLRenderer(m_Window, m_Renderer);
     ImGui_ImplSDLRenderer3_Init(m_Renderer);
+    // Create the Gaussian particle texture
+    m_ParticleTexture = CreateGaussianGlowTexture(PARTICLE_TEXTURE_WIDTH);
+    if (!m_ParticleTexture)
+    {
+        return false;
+    }
 
     return true;
 }
 
-void SoftwareRenderer::BeginFrame()
+void SoftwareRenderer::BeginFrame(const bool IsPanelOpen)
 {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -126,22 +135,83 @@ void SoftwareRenderer::EndFrame()
 }
 
 SDL_Texture* SoftwareRenderer::CreateGaussianGlowTexture(int Diameter) {
+    /*
+     * This function creates a circle-ish 64x64 texture with soft Gaussian fall off(alpha)
+     * So it gives each particle a smoother, glowing appearance
+     * instead of just a flat color dot
+     * 2D Gaussian function centered at origin (0, 0) without the 1/2Pi * Sigma^2 normalization:
+     * f(x, y) = e^(-[(x - 0)^2 + (y - 0)^2)/2*sigma^2)
+     *
+     */
+
+
     // Create a CPU-side surface to fill pixel by pixel
     SDL_Surface* Surface = SDL_CreateSurface(Diameter, Diameter, SDL_PIXELFORMAT_RGBA8888);
     if (!Surface)
     {
         std::cerr << "Failed to create SDL_Surface: " << SDL_GetError() << std::endl;
-        return false;
+        return nullptr;
     }
-
-    float Center = Diameter / 2.f;
-    float Sigma = Diameter / 4.5;
-    float TwoSigmaSquare = Sigma * Sigma * 2.f;
+    // Diameter just refers to the length of the sizes of our texture in pixels
+    // So in our case it's 64, then the center sits at (32/31, 32/31), center as in the center of our texture
+    const float Center = Diameter / 2.f;
+    const float Sigma = Diameter / 4.5f;
+    const float TwoSigmaSquare = Sigma * Sigma * 2.f;
 
     uint32_t* Pixels = static_cast<uint32_t*>(Surface->pixels);
-    int Pic
+    // Pitch is just graphics term for the width of a single row of pixels
+    // We explicitly get it here because rows can get padded for memory alignment
+    const int Pitch = Surface->pitch / 4;
+    for (int i = 0; i < Diameter; i++)
+    {
+        for (int j = 0; j < Diameter; j++)
+        {
+            // Add 0.5 to sample pixel center
+            float Dx = j - Center + 0.5f;
+            float Dy = i - Center + 0.5f;
+            float DistSq = Dx * Dx + Dy * Dy;
 
-    SDL_SetTextureBlendMode()
+            // Gaussian falloff, we are 1.0 of the color at the center
+            // And 0 of the color at the edges
+            float Alpha = glm::exp(-DistSq / TwoSigmaSquare);
+
+            // Rejection sampling, discard any thing outside the circle
+            if (DistSq > Center * Center)
+            {
+                Alpha = 0.f;
+            }
+            uint8_t FinalAlpha = static_cast<uint8_t>(Alpha * 255.f);
+
+            // The pixel format is A8B8G8R8, so alpha is in the highest byte
+            // The reason why we use 0xFF(all whites) is so that we just scale this with w/e color we got later
+            // So we reuse this texture
+            Pixels[i * Pitch + j] = (FinalAlpha << 24) | 0x00FFFFFF;
+        }
+    }
+    // Upload the CPU surface to a GPU texture
+    SDL_Texture* Texture = SDL_CreateTextureFromSurface(m_Renderer, Surface);
+    SDL_DestroySurface(Surface);
+    if (!Texture)
+    {
+        std::cerr << "Failed to create SDL_Texture: " << SDL_GetError() << std::endl;
+        return nullptr;
+    }
+    // Set texture's blend mode to additive, because we do not want occlusions
+    // We want overlapping particles to all contribute to a pixel's coloring
+    SDL_SetTextureBlendMode(Texture, SDL_BLENDMODE_ADD);
+    return Texture;
+}
+
+void SoftwareRenderer::RenderParticles(const bool IsPanelOpen)
+{
+    using namespace Commons;
+    const Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
+    for (uint32_t i = 0; i < m_ParticleManager->GetParticleCount(); i++)
+    {
+        // Transform particles' world positions into screen positions via 2D camera
+        float ScreenX = 0.f;
+        float ScreenY = 0.f;
+    }
 }
 
 

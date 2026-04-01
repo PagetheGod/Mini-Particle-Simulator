@@ -1,6 +1,10 @@
 ﻿#pragma once
 
+// External libs and STL
 #include <SDL3/SDL.h>
+
+// Own headers
+#include "ParticleManager.hpp"
 
 
 
@@ -22,17 +26,19 @@ public:
     bool Initialize(SDL_Window *window);
 
     // Called at the start of each frame, before any ImGui calls.
-    void BeginFrame();
+    void BeginFrame(const bool IsPanelOpen);
 
     // Called after ImGui::Render(), draws ImGui + clears the background.
     void EndFrame();
 
 private:
     SDL_Texture* CreateGaussianGlowTexture(int Diameter);
+    void RenderParticles(const bool IsPanelOpen);
 private:
     SDL_Renderer* m_Renderer;
     SDL_Window* m_Window;
     SDL_Texture* m_ParticleTexture;
+    ParticleManager* m_ParticleManager;
 
     // Constants
     static constexpr int PARTICLE_TEXTURE_WIDTH = 64;

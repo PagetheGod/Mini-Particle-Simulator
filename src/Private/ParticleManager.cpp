@@ -308,7 +308,7 @@ void ParticleManager::SpawnParticles_RingDisc(const ParticleSimulatorConfig& Con
 {
 }
 
-void ParticleManager::SpwanParticles_Cylinder(const ParticleSimulatorConfig& Config, const float DeltaTime)
+void ParticleManager::SpawnParticles_Cylinder(const ParticleSimulatorConfig& Config, const float DeltaTime)
 {
 }
 

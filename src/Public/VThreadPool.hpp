@@ -17,6 +17,16 @@
 * 3. Added logics in the constructor to cap our max worker thread counts at 3/4 the user's concurrency
 * 4. Getter to ask whether the thread pool had stopped
 */
+
+// Iso -
+/*
+ * This is the thread pool that I had been using, it's much easier to use than the one provided in class
+ * It does not require the use of a void*, or a dedicated struct just to pass arguments
+ * Although it does make very heavy use of templates, so it can be confusing to read
+ * And I also added a bit of restriction to the maximum number of threads this can use
+ * I keep this here for testing and references
+ */
+
 class VThreadPool
 {
 public:

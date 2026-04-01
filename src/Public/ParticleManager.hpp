@@ -127,7 +127,7 @@ struct ParticleSimulatorConfig
  * Although using this means we can't just delete[] anymore, need to call std::free() on POSIX
  * And _aligned_free() on Windows
  *
- * Also, fun thing I learend, despite being called a custom "deleter", the second template argument to unique_ptr
+ * Also, fun thing I learned, despite being called a custom "deleter", the second template argument to unique_ptr
  * is literally a struct(in popular implementations) that contains a function that free your memory
  */
 // In our case it's guaranteed to be a float, so just using float ptr here
@@ -154,6 +154,14 @@ using AlignedArray = std::unique_ptr<float[], AlignedDeleter>;
 // Using vectors here is also fine. But since we initialize it to the max possible particle count
 // And we don't resize, use iterator... or any of the vector utilities
 // Therefore, no need for vectors
+/*
+ * I initially went for a SoAoS design which uses a free list
+ * Then I realized that the implementation is pretty bad for SIMD
+ * Due to the fact that the dead particles will be mixed with the live ones
+ * Forming holes which make everything awkward
+ * So I switched to this pure SoA design, and when we kill a particle,
+ * we just swap it with the last live one
+ */
 struct ParticleStates
 {
     AlignedArray Px;
@@ -196,7 +204,6 @@ public:
         const bool IsConfigDirty);
 
 
-
     //Getters and setters
     [[nodiscard]] uint32_t GetParticleCount() const {
         return m_ParticleCount;
@@ -205,6 +212,51 @@ public:
 
 private:
     // Granular particle update functions
+
+    void SpawnParticles(const ParticleSimulatorConfig& Config, const bool IsConfigDirty, const float DeltaTime);
+    void UpdateParticles(float DeltaTime, const bool IsConfigDirty);
+
+
+    // This function only gets called when the user set scaled color to true
+    // Meaning that we need to lerp between start and end colors based on their relative lifetimes
+    void UpdateParticleColor(uint32_t StartParticleIndex, uint32_t Count,
+        const glm::vec3& StartColor, const glm::vec3& EndColor);
+    void UpdateParticleScale(uint32_t BeginIndex, uint32_t EndIndex);
+    void UpdateParticleLifeTime(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime);
+    // Function to kill a single particle
+    void KillParticle(const uint32_t KillIndex);
+
+    // This function will use the already-updated velocities to update particle positions
+    // One axis at a time for parallel processing
+    // Meaning it should get called AFTER forces had been solved
+    void UpdateParticlePositionForAxis_Scalar(float* StartParticlePtr, uint32_t Count, const float* Velocity,
+    float DeltaTime);
+    void CheckParticleLifeTime();
+    // Particle spawn functions for each shape
+    void SpawnParticles_Sphere(const ParticleSimulatorConfig& Config, const float DeltaTime);
+    void SpawnParticles_BoxPlane(const ParticleSimulatorConfig& Config, const float DeltaTime);
+    void SpawnParticles_RingDisc(const ParticleSimulatorConfig& Config, const float DeltaTime);
+    void SpawnParticles_Cylinder(const ParticleSimulatorConfig& Config, const float DeltaTime);
+
+    // Force solvers - these will get dispatched by the UpdateParticle function
+    void SolveGravity(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime);
+    void SolveWind(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence);
+    // Computes the wind influence vector for this frame. Call once per frame before dispatching SolveWind to threads.
+    glm::vec3 ComputeWindInfluence(float Strength, const glm::vec3& Direction, float Period, float DeltaTime);
+
+    void SolveDrag(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient,
+        const float DeltaTime);
+
+    void SolveVortex(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
+        const float DeltaTime, const glm::vec3& VortexCenter);
+
+    void SolvePointForce(uint32_t StartParticleIndex, uint32_t Count,
+        const glm::vec3& ForcePosition, const float Strength,const float DeltaTime);
+
+
+    // These are some SIMD implementations for particle update functions I wrote at the start
+    // Halfway through I realized that compiler auto-vectorizations might do a better job than I do
+    // But I am keeping them here for now
     template<SIMDLevel Level>
     void UpdateParticlePositionForAxis(float* StartParticlePtr, uint32_t Count, const float* Velocity, float DeltaTime);
 
@@ -213,40 +265,6 @@ private:
 
     template<SIMDLevel Level>
     void SolveGravity(float* StartParticlePtr, uint32_t Count, float GravityScale, float DeltaTime);
-
-
-
-    // This function only gets called when the user set scaled color to true
-    // Meaning that we need to lerp between start and end colors based on their relative lifetimes
-    void UpdateParticleColor(uint32_t StartParticleIndex, uint32_t Count,
-        const glm::vec3& StartColor, const glm::vec3& EndColor);
-    void UpdateParticleScale(uint32_t BeginIndex, uint32_t EndIndex);
-
-    void SpawnParticles(const ParticleSimulatorConfig& Config, const bool IsConfigDirty, const float DeltaTime);
-    void UpdateParticles(float DeltaTime, const bool IsConfigDirty);
-    void UpdateParticlePositionForAxis_Scalar(float* StartParticlePtr, uint32_t Count, const float* Velocity,
-    float DeltaTime);
-    void CheckParticleLifeTime();
-    // Particle spawn functions for each shape
-    void SpawnParticles_Sphere(const ParticleSimulatorConfig& Config, const float DeltaTime);
-    void SpawnParticles_BoxPlane(const ParticleSimulatorConfig& Config, const float DeltaTime);
-    void SpawnParticles_RingDisc(const ParticleSimulatorConfig& Config, const float DeltaTime);
-    void SpwanParticles_Cylinder(const ParticleSimulatorConfig& Config, const float DeltaTime);
-
-    // Force solvers
-    void SolveGravity(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime);
-    void SolveWind(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence);
-    // Computes the wind influence vector for this frame. Call once per frame before dispatching SolveWind to threads.
-    glm::vec3 ComputeWindInfluence(float Strength, const glm::vec3& Direction, float Period, float DeltaTime);
-    void SolveDrag(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient,
-        const float DeltaTime);
-    void SolveVortex(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
-        const float DeltaTime, const glm::vec3& VortexCenter);
-    void SolvePointForce(uint32_t StartParticleIndex, uint32_t Count,
-        const glm::vec3& ForcePosition, const float Strength,const float DeltaTime);
-    void UpdateParticleLifeTime(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime);
-    void KillParticle(const uint32_t KillIndex);
-
     // Helper to create a float array aligned to specified boundary
     AlignedArray AllocateAlignedArray(size_t NumElements, size_t Alignment);
 private:
