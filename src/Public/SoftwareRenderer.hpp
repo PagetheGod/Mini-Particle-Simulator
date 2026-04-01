@@ -28,7 +28,7 @@ public:
     void EndFrame();
 
 private:
-    bool CreateGaussianGlowTexture(int Diameter);
+    SDL_Texture* CreateGaussianGlowTexture(int Diameter);
 private:
     SDL_Renderer* m_Renderer;
     SDL_Window* m_Window;

@@ -129,6 +129,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${CMAKE_SOURCE_DIR}/src/Public
+    ${CMAKE_SOURCE_DIR}/src/ThirdParty/pcg/include
 )
 
 

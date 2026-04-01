@@ -19,20 +19,24 @@
 UIManager::UIManager(std::function<void(bool SetLoopEnable)> InToggleLoopCallback) : m_ToggleLoopCallback(std::move(InToggleLoopCallback)){
 }
 
-void UIManager::UIFrame(float Fps, float FrameTimeMs, uint32_t ParticleCount, ParticleSimulatorConfig &ParticleConfig)
+void UIManager::UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorConfig& ParticleConfig,
+    uint32_t ParticleCount)
 {
-    DrawStatusBar(Fps, FrameTimeMs, ParticleCount);
-}
-
-void UIManager::DrawStatusBar(float Fps, float FrameTimeMs, uint32_t ParticleCount) const
-{
-    using namespace Commons::Layout;
-    // Status bar is hidden when the panels are collapsed
+    // Settings panel
     if (!m_IsPanelOpen)
     {
+        DrawPanelExpandButton();
         return;
     }
+    DrawStatusBar(InDeltaTimeData, ParticleCount);
+    GetParticleSimulatorConfig(ParticleConfig);
+    // Draw the collapse button at last so it doesn't get drawn over by settings panel
+    DrawPanelCollapseButton();
+}
 
+void UIManager::DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t ParticleCount) const
+{
+    using namespace Commons::Layout;
     // Position: full width, at the bottom of the window
     ImGui::SetNextWindowPos(ImVec2(0, WINDOW_HEIGHT - STATUS_BAR_HEIGHT));
     ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, STATUS_BAR_HEIGHT));
@@ -44,24 +48,17 @@ void UIManager::DrawStatusBar(float Fps, float FrameTimeMs, uint32_t ParticleCou
     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoFocusOnAppearing |
     ImGuiWindowFlags_NoBringToFrontOnFocus;
-    //
-    ImGui::Begin("##Status Bar", nullptr, WindowFlags);
+    // Basically when we say begin(), we are telling ImGui: "I want to start drawing UI to a window"
+    // We can say begin + end() multiple times in a frame to the same window
+    ImGui::Begin("Status Bar", nullptr, WindowFlags);
 
     // Stats on separate lines for readability.
-    ImGui::Text("FPS: %.1f", Fps);
-    ImGui::Text("Frame Time: %.1f ms", FrameTimeMs);
-    ImGui::Text("Pressed Space to toggle pause");
-
+    ImGui::Text("FPS: %d", InDeltaTimeData.FPS);
+    ImGui::Text("Frame Time: %.1f ms", InDeltaTimeData.FrameTime);
     // Format particle count with thousands separator
     // In an actual system this shall be handled by a while loop with division and modulo
-    // But since we probably won't even get a million particle count this stupid loop would work
-    if (ParticleCount >= 1'000'000)
-    {
-        ImGui::Text("Particles: %u,%03u,%03u",
-                    ParticleCount / 1'000'000, (ParticleCount / 1000) % 1000,
-                    ParticleCount % 1000);
-    }
-    else if (ParticleCount >= 1000)
+    // But since we probably won't get over 100k particle count this logic should suffice
+    if (ParticleCount >= 1000)
     {
         ImGui::Text("Particles: %u,%03u", ParticleCount / 1000, ParticleCount % 1000);
     }
@@ -69,30 +66,37 @@ void UIManager::DrawStatusBar(float Fps, float FrameTimeMs, uint32_t ParticleCou
     {
         ImGui::Text("Particles: %u", ParticleCount);
     }
-
+    ImGui::Text("Pressed Space to toggle pause");
     ImGui::End();
 }
 
 void UIManager::GetParticleSimulatorConfig(ParticleSimulatorConfig &Config)
 {
+    using namespace Commons;
+    // Start drawing the entire settings panel
+    ImGui::SetNextWindowPos(ImVec2(Layout::VIEWPORT_WIDTH_OPEN, 0));
+    ImGui::SetNextWindowSize(ImVec2(Layout::PANEL_WIDTH, Layout::WINDOW_HEIGHT));
+    // Set flags
+    ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize;
+    ImGui::Begin("Particle Simulator Settings", nullptr, WindowFlags);
     DrawSettingsPanel(Config);
     DrawParticleInit(Config);
     DrawParticleVisuals(Config);
     DrawForceSettings(Config.ForceConfigData);
+    // End drawing settings panel
+    ImGui::End();
 }
 
 void UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
 {
-    if (!m_IsPanelOpen)
-    {
-        return;
-    }
     // Preset selectors
+    // Currently, we are using a system where the enum constant's values must match the indices in this array
+    // Fragile and EVIL, should probably look for a more stable solution
     const char* Presets[] = {"None", "OmniDirectionalBurst", "Firework", "Fountain", "Vortex", "Waterfall", "Snow"};
     static int SelectedPreset = 0;
     if (ImGui::Combo("Particle Preset", &SelectedPreset, Presets, IM_ARRAYSIZE(Presets)))
     {
-        //TODO:
         const PresetType SelectedPresetType = static_cast<PresetType>(SelectedPreset);
         switch (SelectedPresetType)
         {
@@ -136,10 +140,11 @@ void UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
     ImGui::Spacing();
 
     // Toggle loop
-    bool ShouldLoop = false;
+    bool ShouldLoop = m_ShouldLoop;
     if (ImGui::Checkbox("Loop", &ShouldLoop))
     {
         m_ToggleLoopCallback(ShouldLoop);
+        m_ShouldLoop = ShouldLoop;
     }
 
     // Emitter mode
@@ -147,22 +152,26 @@ void UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
     int CurrentMode = static_cast<int>(Config.Mode);
     if (ImGui::Combo("Emitter Mode", &CurrentMode, EmitterMode, IM_ARRAYSIZE(EmitterMode)))
     {
-        //TODO: Set the emitter mode in the config
         Config.Mode = static_cast<enum EmitterMode>(CurrentMode);
     }
-
     if (Config.Mode == EmitterMode::Burst)
     {
-        ImGui::SliderInt("Burst Count", &Config.BurstCount, 10, 50000);
+        // How often does the emitter spawn particles in burst mode
+        ImGui::SliderFloat("Burst Interval", &Config.BurstInterval, 0.5f, 3.f);
+        // We reuse the Emitter Rate variable for both burst and continuous emitter
+        ImGui::SliderInt("Particle Count Per Burst", &Config.EmissionRate,
+            5, 5000);
     }
     else
     {
-        ImGui::SliderFloat("Emitter Rate", &Config.EmissionRate, 10.f, 10000.0f, "%.0f");
+        // These numbers are kinda arbitrary, might be better to define them in commons.hpp
+        // As constants, however, since we are just using them here, it's ok for now
+        ImGui::SliderInt("Particle Per Second", &Config.EmissionRate, 50, 7500);
     }
     // Spawn shape settings
     if (ImGui::CollapsingHeader("Emitter Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        // Spwan shapes
+        // Spawn shapes
         const char* Shapes[] = {"Sphere", "Cone", "Box/Plane", "Ring/Disc", "Cylinder"};
         int CurrentShape = static_cast<int>(Config.Shape);
         if (ImGui::Combo("Shape", &CurrentShape, Shapes, IM_ARRAYSIZE(Shapes)))
@@ -217,12 +226,6 @@ void UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
     }
     ImGui::Spacing();
 }
-
-void UIManager::DrawPanelContents(ParticleSimulatorConfig& Config)
-{
-
-}
-
 void UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
     if (ImGui::CollapsingHeader("Particle Initialization", ImGuiTreeNodeFlags_DefaultOpen)) {
         // First check whether the user wants random speed at spawn
@@ -362,7 +365,6 @@ void UIManager::DrawParticleVisuals(ParticleSimulatorConfig &Config)
         ImGui::Text("Start to End Color Transition Preview");
         ImGui::Spacing();
     }
-
     ImGui::Checkbox("Randomize Colors for Individual Particle", &Config.IsRandomColor);
     if (ImGui::IsItemHovered())
     {
@@ -523,8 +525,8 @@ void UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                     {
                         ImGui::SliderFloat("Wind Strength", &ForceDataRef.Strength,
                             0.f, 10.f, "%.1f");
-                        ImGui::SliderFloat("Wind Frequency", &ForceDataRef.Frequency,
-                             0.f, 5.f, "%.2f Hz (0 = constant wind)");
+                        ImGui::SliderFloat("Wind Period", &ForceDataRef.WindPeriod,
+                             0.5f, 5.f, "%.1f Seconds");
                         ImGui::SliderFloat("Wind Direction X", &ForceDataRef.Direction.x,
                              -1.f, 1.f, "%.1f");
                         ImGui::SliderFloat("Wind Direction Y", &ForceDataRef.Direction.y,
@@ -554,20 +556,14 @@ void UIManager::DrawForceSettings(ForceConfig& ForceConfig)
     }
 }
 
-void UIManager::DrawPanelToggleButton() {
+void UIManager::DrawPanelExpandButton() {
     using namespace Commons;
-    // Only show this button when the settings panel and status bar are collapsed
-    if (m_IsPanelOpen)
-    {
-        return;
-    }
-
     // Draw the "expand panel" button at the top-right corner
     constexpr float ButtonWidth = 45.f;
     constexpr float ButtonHeight = 35.f;
     constexpr float ButtonMargin = 8.5f;
 
-    // Set where we will draw the button, it's set next window pos
+    // Set where we will draw the button, it's Set Next Window pos
     // Because the NextWindow is our button
     ImGui::SetNextWindowPos(
         ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) -
@@ -594,7 +590,9 @@ void UIManager::DrawPanelToggleButton() {
 
     /* ANOTHER Tab hint (bottom-right corner) in case the expand button got ignored
      * Small semi-transparent text reminding the user they can press Tab.
-     * This does obstruct user's view and disappears when the UI is opened. */
+     * This does obstruct user's view and disappears when the UI is opened.
+     *
+     */
     constexpr float TabHintLength = 200.f;
     constexpr float TabHintHeight = 25.f;
     ImGui::SetNextWindowPos(ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) - TabHintLength,
@@ -612,4 +610,40 @@ void UIManager::DrawPanelToggleButton() {
 
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
+}
+
+void UIManager::DrawPanelCollapseButton()
+{
+    // This function is very similar to the DrawPanelExpandButton()
+    // Difference is this is drawed a collapse instead of expand button
+    using namespace Commons;
+    // Draw the "collapse panel" button at the top-right corner
+    constexpr float ButtonWidth = 45.f;
+    constexpr float ButtonHeight = 35.f;
+    constexpr float ButtonMargin = 8.5f;
+
+    // Set where we will draw the button, it's Set Next Window pos
+    // Because the NextWindow is our button
+    ImGui::SetNextWindowPos(
+        ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) -
+               ButtonWidth - ButtonMargin, ButtonMargin));
+    ImGui::SetNextWindowSize(ImVec2(ButtonWidth, ButtonHeight));
+
+    // Just like WIN32, when we create any window, we need to set flags
+    ImGuiWindowFlags Flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+    // Begin ImGui Frame again
+    ImGui::Begin("Panel Toggle Button", nullptr, Flags);
+    if (ImGui::Button("Collapse Panel >>"))
+    {
+        m_IsPanelOpen = false;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        // Tool tip is short, just use SetToolTip
+        ImGui::SetTooltip("Collapse the settings panel and status bar (hotkey Tab)");
+    }
+    ImGui::End();
 }

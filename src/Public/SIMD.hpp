@@ -13,6 +13,17 @@
  * A class that is responsible for checking simd supports, and provide wrappers around all the
  * SIMD intrinsics, as of right now, it ONLY supports x86-64 SIMD intrinsics
  * No plan for ARM support for now
+ * As of right now we are not really using this class, since we will be relying on compiler auto vectorization
+ * It probably will do a better job than us for most cases. We can check the disassembly
+ * to check if auto vectorizations are working
+ * But I am keeping this class here because it's good practice and references for many interesting stuffs in C++
+ *
+ *
+ *
+ * Iso - Since you are on Mac(ARM64), these codes WILL NOT compile on your computer
+ * Since these intrinsics are CPU-specific, these are for x86-64 CPUs only
+ * And your intellisense might even complain about the functions being non-existent
+ * That's expected and ok. Since Travis will test this using his PC, which uses x86 CPU
  */
 
 
@@ -253,6 +264,10 @@ public:
     void CheckSIMDSupport();
 
     [[nodiscard]] uint32_t GetSIMDWidth() const;
+    [[nodiscard]] SIMDLevel GetSIMDLevel() const
+    {
+        return m_SIMDLevel;
+    }
 private:
     // Writing the ifdef/else/endif for msvc/clang+gcc more than once is enough to drive me nuts
     // So here is a refactor to streamline invoking CPUID, we need a leaf number, subleaf

@@ -7,6 +7,7 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include <iostream>
+#include "SDL3/SDL_render.h"
 //Own headers
 #include "SoftwareRenderer.hpp"
 #include "Commons.hpp"
@@ -40,7 +41,9 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     // Despite using GPU-accelerated compositing, the PARTICLE RENDERING
     // is still CPU-based (SDL_RenderPoint / SDL_RenderGeometry).
     // ImGui rendering is handled by the SDL_Renderer too.
-    m_Renderer = SDL_CreateRenderer(Window, nullptr);
+    m_Window = Window;
+    m_Renderer = SDL_CreateRenderer(m_Window, nullptr);
+    SDL_SetRenderVSync(m_Renderer, 1);
     if (!m_Renderer)
     {
         std::cerr << "Failed to create SDL_Renderer: " << SDL_GetError() << std::endl;
@@ -78,8 +81,7 @@ void SoftwareRenderer::EndFrame()
     using namespace Commons;
     // End the current imgui frame, all draw data should be finalized at this point
     ImGui::Render();
-    // Set logical resolution to 2560 x 1440 for supersampling
-    // Set logical resolution to 2560×1440 for particle drawing.
+    // Set logical resolution to 2560 x 1440 for particle supersampling
     // SDL scales all draw calls to fit the 1920×1080 window.
     SDL_SetRenderLogicalPresentation(m_Renderer, Layout::RENDER_WIDTH, Layout::RENDER_HEIGHT,
         SDL_LOGICAL_PRESENTATION_LETTERBOX);
@@ -123,7 +125,7 @@ void SoftwareRenderer::EndFrame()
     SDL_RenderPresent(m_Renderer);
 }
 
-bool SoftwareRenderer::CreateGaussianGlowTexture(int Diameter) {
+SDL_Texture* SoftwareRenderer::CreateGaussianGlowTexture(int Diameter) {
     // Create a CPU-side surface to fill pixel by pixel
     SDL_Surface* Surface = SDL_CreateSurface(Diameter, Diameter, SDL_PIXELFORMAT_RGBA8888);
     if (!Surface)
@@ -136,7 +138,10 @@ bool SoftwareRenderer::CreateGaussianGlowTexture(int Diameter) {
     float Sigma = Diameter / 4.5;
     float TwoSigmaSquare = Sigma * Sigma * 2.f;
 
+    uint32_t* Pixels = static_cast<uint32_t*>(Surface->pixels);
+    int Pic
 
+    SDL_SetTextureBlendMode()
 }
 
 

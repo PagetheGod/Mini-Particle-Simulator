@@ -17,7 +17,6 @@
 #include "Application.hpp"
 #include "HardwareRenderer.hpp"
 #include "Commons.hpp"
-#include "UIManager.hpp"
 #include "ParticleManager.hpp"
 Application::Application() : m_Window(nullptr), m_RendererType(RendererType::Software),
 m_SoftwareRenderer(nullptr), m_HardwareRenderer(nullptr), m_UIManager(nullptr), m_ParticleManager(nullptr),
@@ -79,36 +78,24 @@ bool Application::Initialize() {
     return true;
 }
 
-bool Application::Frame(float DeltaTime, const InputResult& Input)
+bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult& Input)
 {
-	// FPS Counter
-	int FrameCount = 0;
-	float FPSTimer = 0.f;
-	//Fps counter
-	FrameCount++;
-	FPSTimer += DeltaTime;
-
 	ParticleSimulatorConfig ParticleConfig;
-	m_UIManager->UIFrame(FPS)
-
-	if (FPSTimer >= 1.0)
-	{
-		std::string FPSTitle = std::format("FPS: {} (dt: {:.2f}ms)", FrameCount, DeltaTime * 1000.0);
-		SDL_SetWindowTitle(m_Window, FPSTitle.data());
-		FrameCount = 0;
-		FPSTimer -= 1.0;
-	}
 
 	/*
 	 * Frame flow:
-	 * 1. Update FPS number
+	 * 1. Update FPS number - Done
 	 * 2. Check if settings panel is collapsed, if it's, set the state in UIManager and update camera look at
 	 * 3. Call UIFrame(), this will update the UI and take care panel collapse/expansion
 	 * 4. Check if user did camera orbiting, if they did, update camera position and orientation
 	 * 5. Call ParticleFrame(), this will both spawn and update the particles
 	 * 6. Call RenderFrame(), passing it the camera object so the renderer has access to up-to-date view and projection matrix
 	 */
-
+	if (Input.Event == InputEvent::ToggleViewport)
+	{
+		m_UIManager->TogglePanelOpen();
+	}
+	m_UIManager->UIFrame(InDeltaTimeData, ParticleConfig, m_ParticleManager->GetParticleCount());
 
 }
 
@@ -274,29 +261,66 @@ float Application::GetDeltaTime(uint64_t& LastNs)
 	return DeltaTime;
 }
 
+void Application::FrameTiming(DeltaTimeData& DTData)
+{
+	/*
+	 * Make all the frame timing variables static so they persist between frames
+	 * Note not ALL of frame timing variables(such as delta time) have to persist
+	 * But the following three should
+	 */
+	static uint64_t LastNs = SDL_GetTicksNS();
+	static int FrameCount = 0;
+	static float FPSTimer = 0.f;
+
+	DTData.DeltaTime = GetDeltaTime(LastNs);
+	DTData.FrameTime = DTData.DeltaTime * 1000.f;
+
+	FrameCount++;
+	FPSTimer += DTData.DeltaTime;
+	// We passed 1 second, tally up the fps number and fill the struct
+	// Then reset the timer
+	if (FPSTimer >= 1.f)
+	{
+		DTData.FPS = FrameCount;
+		FrameCount = 0;
+		FPSTimer -= 1.f;
+	}
+}
+
 void Application::Run()
 {
+	/*
+	 * The function that starts, and maintain the main loop of the application
+	 * It does the following every frame:
+	 * 1. Call input processing function. Check the results.
+	 * 2. Skip the frame and quit if user chose to exit, skip to the next frame if user chose to pause
+	 * 3. Inform the ui manager if the user pressed tab to toggle the settings panel
+	 * 4. Once we are done with processing the above "special" input events, proceed to call Frame()
+	 * It also sends the frame function a delta time and input result struct which packs input informations
+	 */
 	bool Running = true;
-	uint64_t LastNs = SDL_GetTicksNS();
+	DeltaTimeData DTData{};
 	while (Running)
 	{
-		const float DeltaTime = GetDeltaTime(LastNs);
+		FrameTiming(DTData);
 		InputResult Result = m_InputManager.ProcessInput(m_UIManager->IsPanelOpen());
 		if (Result.Event == InputEvent::Quit)
 		{
 			Running = false;
-			break;
+			// We can just get rid of the Running bool and break here
+			continue;
 		}
 		// Toggle pause
 		if (Result.Event == InputEvent::TogglePause)
 		{
 			m_Paused = !m_Paused;
 		}
-		if (m_Paused)
+		// Toggle settings panel
+		if (Result.Event == InputEvent::ToggleViewport)
 		{
-			continue;
+			m_UIManager->TogglePanelOpen();
 		}
-		Frame(DeltaTime, Result);
+		Frame(DTData, Result);
 	}
 }
 

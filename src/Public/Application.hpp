@@ -4,6 +4,7 @@
 
 #include "InputManager.hpp"
 #include "SoftwareRenderer.hpp"
+#include "UIManager.hpp"
 
 /*
 * This class will handle the GUI application, including:
@@ -35,6 +36,8 @@ enum class PlaybackState : uint8_t
     Stopped
 };
 
+
+
 class Application {
 public:
     // Constructors and destructors
@@ -47,7 +50,7 @@ public:
     //Init and frame function
     bool Initialize();
     void Run();
-    bool Frame(float DeltaTime, const InputResult& Input);
+    bool Frame(const DeltaTimeData& InDeltaTimeData, const InputResult& Input);
 
 // Separate access modifiers to help organize functions and variables
 public:
@@ -62,6 +65,8 @@ private:
 
     // Get delta time
     float GetDeltaTime(uint64_t& LastNs);
+    // Calculate delta time, FPS, and frame time each frame
+    void FrameTiming(DeltaTimeData& DTData);
     // Poll application events, this includes inputs, quit, and resizing(optional)
     // This function will return
 private:

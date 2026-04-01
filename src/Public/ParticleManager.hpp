@@ -3,10 +3,13 @@
 #include <memory>
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-
 #include <glm/glm.hpp>
+
+
 #include "Commons.hpp"
 #include "VThreadPool.hpp"
+#include "SIMD.hpp"
+
 /*
  * This class will handle creating, updating, and destroying particles
  * It's where we will run the core math and physics of our particle updates
@@ -61,7 +64,7 @@ struct ForceData
     union
     {
         float VortexPull = 0.f;
-        float Frequency;
+        float WindPeriod;
     };
 
 };
@@ -83,11 +86,8 @@ struct ForceConfig
  */
 struct ParticleSimulatorConfig
 {
-    union
-    {
-        int BurstCount = 0;
-        float EmissionRate;
-    };
+    float BurstInterval = 0.f;
+    int EmissionRate = 0;
     glm::vec3 StartColor = glm::vec3(1.f);
     glm::vec3 EndColor = glm::vec3(1.f);
     // Shape specific data...
@@ -186,18 +186,17 @@ public:
     ~ParticleManager() = default;
 
     //Actual work functions
+
+    // Allocated all the arrays holding the particle states, this does not actually initialize the particle data
+    // We spawn particles according to config we get from the UI Manager
     void InitializeParticles();
-    void SpawnParticles(const ParticleSimulatorConfig& Config);
-    void UpdateParticles(float DeltaTime);
-    glm::vec3 SolveForces(const ForceConfig& ForceConfigData);
-    void SolveWind(const ForceConfig& ForceConfigData, uint32_t BeginIndex, uint32_t EndIndex);
-    void SolveDrag(const ForceConfig& ForceConfigData, uint32_t BeginIndex, uint32_t EndIndex);
-    void SolveVortex(const ForceConfig& ForceConfigData, uint32_t BeginIndex, uint32_t EndIndex);
-    void SolvePointForce(const ForceConfig& ForceConfigData, uint32_t BeginIndex, uint32_t EndIndex);
-    void UpdateParticlePositions(uint32_t BeginIndex, uint32_t EndIndex);
-    void UpdateParticleLifeTime(uint32_t BeginIndex, uint32_t EndIndex);
-    void UpdateParticleColor(uint32_t BeginIndex, uint32_t EndIndex);
-    void UpdateParticleScale(uint32_t BeginIndex, uint32_t EndIndex);
+    // The top-level per frame function that will get called by Application class inside its main loop
+    // This will then go on to call other more granular update functions
+    void ParticleFrame(const float DeltaTime, const ParticleSimulatorConfig& Config,
+        const bool IsConfigDirty);
+
+
+
     //Getters and setters
     [[nodiscard]] uint32_t GetParticleCount() const {
         return m_ParticleCount;
@@ -205,16 +204,63 @@ public:
 public:
 
 private:
+    // Granular particle update functions
+    template<SIMDLevel Level>
+    void UpdateParticlePositionForAxis(float* StartParticlePtr, uint32_t Count, const float* Velocity, float DeltaTime);
+
+    template<SIMDLevel Level>
+    void UpdateParticleLifeTime(float* StartParticlePtr, uint32_t Count, float DeltaTime);
+
+    template<SIMDLevel Level>
+    void SolveGravity(float* StartParticlePtr, uint32_t Count, float GravityScale, float DeltaTime);
+
+
+
+    // This function only gets called when the user set scaled color to true
+    // Meaning that we need to lerp between start and end colors based on their relative lifetimes
+    void UpdateParticleColor(uint32_t StartParticleIndex, uint32_t Count,
+        const glm::vec3& StartColor, const glm::vec3& EndColor);
+    void UpdateParticleScale(uint32_t BeginIndex, uint32_t EndIndex);
+
+    void SpawnParticles(const ParticleSimulatorConfig& Config, const bool IsConfigDirty, const float DeltaTime);
+    void UpdateParticles(float DeltaTime, const bool IsConfigDirty);
+    void UpdateParticlePositionForAxis_Scalar(float* StartParticlePtr, uint32_t Count, const float* Velocity,
+    float DeltaTime);
+    void CheckParticleLifeTime();
+    // Particle spawn functions for each shape
+    void SpawnParticles_Sphere(const ParticleSimulatorConfig& Config, const float DeltaTime);
+    void SpawnParticles_BoxPlane(const ParticleSimulatorConfig& Config, const float DeltaTime);
+    void SpawnParticles_RingDisc(const ParticleSimulatorConfig& Config, const float DeltaTime);
+    void SpwanParticles_Cylinder(const ParticleSimulatorConfig& Config, const float DeltaTime);
+
+    // Force solvers
+    void SolveGravity(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime);
+    void SolveWind(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence);
+    // Computes the wind influence vector for this frame. Call once per frame before dispatching SolveWind to threads.
+    glm::vec3 ComputeWindInfluence(float Strength, const glm::vec3& Direction, float Period, float DeltaTime);
+    void SolveDrag(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient,
+        const float DeltaTime);
+    void SolveVortex(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
+        const float DeltaTime, const glm::vec3& VortexCenter);
+    void SolvePointForce(uint32_t StartParticleIndex, uint32_t Count,
+        const glm::vec3& ForcePosition, const float Strength,const float DeltaTime);
+    void UpdateParticleLifeTime(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime);
+    void KillParticle(const uint32_t KillIndex);
+
     // Helper to create a float array aligned to specified boundary
     AlignedArray AllocateAlignedArray(size_t NumElements, size_t Alignment);
 private:
     ParticleStates m_ParticleStates;
     std::unique_ptr<VThreadPool> m_VThreadPool;
 
+    // States trackers
     uint32_t m_ParticleCount = 0;
     glm::vec3 m_EmitterPosition = glm::vec3(0.f);
-
-    // Constants
+    SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
+    uint32_t m_SIMDWidth = 4;
+    float m_TimeSinceLastWind = 0.f; // Using this to help us calculate wind force, there might be a better idea
+    float m_TimeSinceLastBurst = 0.f;
+    float m_BurstInterval = 0.f;
     static constexpr uint32_t NUM_MAX_PARTICLES = 65000;
     static constexpr uint32_t NUM_THREADS_USED = 16;
 };
