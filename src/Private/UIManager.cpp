@@ -234,18 +234,18 @@ void UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         if (IsRandomSpeed)
         {
             // Min and max base speed at spawn
-            ImGui::SliderFloat("Min Base Speed at Spawn", &Config.BaseSpeedMin,0.1f, 100.f);
-            ImGui::SliderFloat("Max Base Speed at Spawn", &Config.BaseSpeedMax,0.1f, 100.f);
+            ImGui::SliderFloat("Min Particle Velocity at Spawn", &Config.Speed.x,0.1f, 100.f);
+            ImGui::SliderFloat("Max Particle Velocity at Spawn", &Config.Speed.y,0.1f, 100.f);
             // Clamp
-            if (Config.BaseSpeedMin >= Config.BaseSpeedMax)
+            if (Config.Speed.x >= Config.Speed.y)
             {
-                Config.BaseSpeedMin = Config.BaseSpeedMax - 0.1f;
+                Config.Speed.x = Config.Speed.y - 0.1f;
             }
         }
         else
         {
             // No random interval, just a fix speed
-            ImGui::SliderFloat("Base Speed at Spawn", &Config.BaseSpeedMin,0.1f, 100.f);
+            ImGui::SliderFloat("Particle velocity at Spawn", &Config.Speed.x,0.1f, 100.f);
         }
         Config.IsRandomSpeed = IsRandomSpeed;
 
@@ -300,29 +300,29 @@ void UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
 
 void UIManager::DrawParticleVisuals(ParticleSimulatorConfig &Config)
 {
-    /* ── Color picker flags ──
+    /* Color picker flags
      * These flags configure what the picker widget displays.
-     * You can change these to customize the picker appearance.
-
+     * We can change these to customize the picker appearance.
      * Available picker styles:
      *   PickerHueWheel — circular hue ring with SV square inside
      *   PickerHueBar   — vertical hue bar with SV square beside it
-    //
-    // Available display modes (combine with |):
-    //   DisplayRGB — show R, G, B number input boxes
-    //   DisplayHSV — show H, S, V number input boxes
-    //   DisplayHex — show hex input (#RRGGBB)
-    //
-    // Number format:
-    //   Float — show values as 0.000–1.000 (useful for shaders)
-    //   (default) — show values as 0–255 (more familiar to artists)
-    //
-    // Other useful flags:
-    //   NoAlpha      — hide alpha even on ColorPicker4
-    //   NoSidePreview — hide the old/new color comparison swatch
-    //   NoSmallPreview — hide the small color preview before the label
-    //   NoInputs     — hide all number inputs (wheel/square only)
-    //   NoLabel      — hide the text label */
+     *
+     * Available display modes :
+     *   DisplayRGB — show R, G, B number input boxes
+     *   DisplayHSV — show H, S, V number input boxes
+     *   DisplayHex — show hex input (#RRGGBB)
+     *
+     * Number format:
+     *   Float — show values as 0.000–1.000
+     *   (default) — show values as 0–255
+     *
+     * Other useful flags:
+     *   NoAlpha      — hide alpha even on ColorPicker4
+     *   NoSidePreview — hide the old/new color comparison swatch
+     *  NoSmallPreview — hide the small color preview before the label
+     *   NoInputs     — hide all number inputs (wheel/square only)
+     *   NoLabel      — hide the text label
+     */
     ImGuiColorEditFlags ColorEditorFlags = ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_DisplayRGB |
         ImGuiColorEditFlags_DisplayHex | ImGuiColorEditFlags_Float;
     /*

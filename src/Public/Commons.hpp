@@ -2,12 +2,32 @@
 
 #include <string>
 #include <cstdint>
+#include <random>
+
+#include "pcg_random.hpp"
+
 
 namespace Commons
 {
     namespace Utility
     {
+        // Helper to generate a random floating point number between [Min, Max)
+        static inline float RandomFloat(const float Min, const float Max)
+        {
+            // Seed with a real random value if possible
+            thread_local pcg_extras::seed_seq_from<std::random_device> SeedSource;
+            // Make a random number engine
+            thread_local pcg32 RandomGenerator(SeedSource);
+            // Generate a random float between min and max
+            std::uniform_real_distribution<float> Distribution(Min, Max);
+            return Distribution(RandomGenerator);
+        }
 
+        // Use the above helper to get a float between 0 and 1
+        static inline float RandomFloat_01()
+        {
+            return RandomFloat(0.f, 1.f);
+        }
     }
     namespace Constants
     {
@@ -31,6 +51,7 @@ namespace Commons
         static constexpr uint8_t MAX_NUM_FORCES = 9;
         // Gravity!!!
         static constexpr float GRAVITY = 9.81f;
+
     }
     namespace Layout
     {

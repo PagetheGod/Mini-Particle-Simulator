@@ -6,7 +6,14 @@
 #include <cstdlib>
 #include <iostream>
 
+#include "glm/gtc/random.hpp"
 #include "glm/gtx/common.inl"
+
+#ifdef _MSC_VER
+#define restrict __restrict
+#else
+#define restrict __restrict__
+#endif
 
 void ParticleManager::InitializeParticles()
 {
@@ -196,6 +203,22 @@ void ParticleManager::SolvePointForce(uint32_t StartParticleIndex, uint32_t Coun
      * 4. This might not get vectorized by the compilers, need to check disassembly
      * Maybe there is some compiler flags we can use to check for that?
      */
+
+    /*
+     * To parallelize a block of logics, the compiler needs make sure we have no pointer aliasing
+     * i.e. different pointer variables pointing to the same memory, leading to data race and corruptions
+     * the __restrict__ qualifier tells the compiler that two pointers are not pointing to
+     * overlapping region in memory
+     * This part is tentative, will be changed later since restrict should work as qualifier in the function inputs
+     */
+    float* __restrict__ ParticlePosX = m_ParticleStates.Px.get();
+    float* __restrict__ ParticlePosY = m_ParticleStates.Py.get();
+    float* __restrict__ ParticlePosZ = m_ParticleStates.Pz.get();
+
+    float* __restrict__ ParticleVelX = m_ParticleStates.Vx.get();
+    float* __restrict__ ParticleVelY = m_ParticleStates.Vy.get();
+    float* __restrict__ ParticleVelZ = m_ParticleStates.Vz.get();
+
     const float DtStrength = Strength * DeltaTime;
     for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
     {
@@ -235,7 +258,7 @@ void ParticleManager::UpdateParticleLifeTime(uint32_t StartParticleIndex, uint32
 
 void ParticleManager::KillParticle(const uint32_t KillIndex) {
     /*
-     * Function to kill a single particle, this could be invoked by kill-Y ar life time expirations
+     * Function to kill a single particle, this could be invoked by kill-Y or life time expirations
      * Basically, this swaps the dead particle with the last alive particle
      * We go from the back to front to make the logics cleaner
      */
@@ -295,23 +318,135 @@ void ParticleManager::CheckParticleLifeTime()
     }
 }
 
-void ParticleManager::SpawnParticles_Sphere(const ParticleSimulatorConfig& Config, const float DeltaTime)
+
+
+void ParticleManager::SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config, const float DeltaTime)
+{
+    /*
+     * Use spherical coordinates to spawn the particles
+     * We need: 1. A a radius-ish R, 2. A heading angle, h, which matches the angle formed with Z(forward)
+     * 3. A pitch angle, which measures how much we "pitch" down from the xz plane
+     * This deviates a bit from the usual math notations
+     */
+    using namespace Commons;
+    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
+    {
+        /*
+         * Generate all the spherical coordinates required
+         * Because equal angular displacement does not create the same surface areas on a sphere
+         * We need to account for that by sampling the sine of pitch uniformly
+         * Otherwise, the poles get too dense and the equator looks sparse
+         */
+        const float Radius = Utility::RandomFloat(0.1f, Config.SphereRadius);
+        const float H = Utility::RandomFloat(-glm::pi<float>(), glm::pi<float>());
+        const float SinP = Utility::RandomFloat(-1.f, 1.f);
+        // Convert to Cartesian
+        const float CosineP = glm::sqrt(1.f - SinP * SinP);
+        const float X = Radius * CosineP * glm::sin(H);
+        const float Y = -Radius * SinP;
+        const float Z = Radius * CosineP * glm::cos(H);
+        m_ParticleStates.Px[i] = X;
+        m_ParticleStates.Py[i] = Y;
+        m_ParticleStates.Pz[i] = Z;
+        // Velocity, color, size, lifetime
+        const glm::vec3 Velocity = SpawnParticles_Speed(X, Y, Z, Config);
+        m_ParticleStates.Vx[i] = Velocity.x;
+        m_ParticleStates.Vy[i] = Velocity.y;
+        m_ParticleStates.Vz[i] = Velocity.z;
+        const glm::vec3 Color = SpawnParticles_Color(Config);
+        m_ParticleStates.R[i] = Color.r;
+        m_ParticleStates.G[i] = Color.g;
+        m_ParticleStates.B[i] = Color.b;
+        m_ParticleStates.Size[i] = SpawnParticles_Size(Config);
+        const float Life = SpawnParticles_LifeTime(Config);
+        m_ParticleStates.LifeTime[i] = Life;
+        m_ParticleStates.MaxLifeTime[i] = Life;
+    }
+}
+
+void ParticleManager::SpawnParticles_BoxPlane(uint32_t StartParticleIndex, uint32_t Count,
+    const ParticleSimulatorConfig& Config, const float DeltaTime)
+{
+    using namespace Commons;
+    // This one is more straightforward, just [-width, width), [-height, height), etc...
+    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
+    {
+        // Generate and set all the coordinates
+        const float X = Utility::RandomFloat(-Config.BoxDimensions.x, Config.BoxDimensions.x);
+        const float Y = Utility::RandomFloat(-Config.BoxDimensions.y, Config.BoxDimensions.y);
+        const float Z = Utility::RandomFloat(-Config.BoxDimensions.z, Config.BoxDimensions.z);
+        m_ParticleStates.Px[i] = X;
+        m_ParticleStates.Py[i] = Y;
+        m_ParticleStates.Pz[i] = Z;
+        // Velocity, color, size, lifetime
+        const glm::vec3 Velocity = SpawnParticles_Speed(X, Y, Z, Config);
+        m_ParticleStates.Vx[i] = Velocity.x;
+        m_ParticleStates.Vy[i] = Velocity.y;
+        m_ParticleStates.Vz[i] = Velocity.z;
+        const glm::vec3 Color = SpawnParticles_Color(Config);
+        m_ParticleStates.R[i] = Color.r;
+        m_ParticleStates.G[i] = Color.g;
+        m_ParticleStates.B[i] = Color.b;
+        m_ParticleStates.Size[i] = SpawnParticles_Size(Config);
+        const float Life = SpawnParticles_LifeTime(Config);
+        m_ParticleStates.LifeTime[i] = Life;
+        m_ParticleStates.MaxLifeTime[i] = Life;
+    }
+}
+
+void ParticleManager::SpawnParticles_RingDisc(uint32_t StartParticleIndex, uint32_t Count,
+    const ParticleSimulatorConfig& Config, const float DeltaTime)
 {
 
 }
 
-void ParticleManager::SpawnParticles_BoxPlane(const ParticleSimulatorConfig& Config, const float DeltaTime)
+void ParticleManager::SpawnParticles_Cylinder(uint32_t StartParticleIndex, uint32_t Count,
+    const ParticleSimulatorConfig& Config, const float DeltaTime)
 {
 }
-
-void ParticleManager::SpawnParticles_RingDisc(const ParticleSimulatorConfig& Config, const float DeltaTime)
+glm::vec3 ParticleManager::SpawnParticles_Speed(float X, float Y, float Z, const ParticleSimulatorConfig& Config)
 {
+    float Speed = 0.f;
+    if (Config.IsRandomSpeed)
+    {
+        Speed = Commons::Utility::RandomFloat(Config.Speed.x, Config.Speed.y);
+    }
+    else
+    {
+        Speed = Config.Speed.x;
+    }
+    // Normalize position to get outward direction, then scale by speed
+    const float InverseDistance = glm::inversesqrt(X * X + Y * Y + Z * Z);
+    return {X * InverseDistance * Speed, Y * InverseDistance * Speed, Z * InverseDistance * Speed};
 }
 
-void ParticleManager::SpawnParticles_Cylinder(const ParticleSimulatorConfig& Config, const float DeltaTime)
+glm::vec3 ParticleManager::SpawnParticles_Color(const ParticleSimulatorConfig& Config)
 {
+    if (Config.IsRandomColor)
+    {
+        return {Commons::Utility::RandomFloat_01(),Commons::Utility::RandomFloat_01(),
+            Commons::Utility::RandomFloat_01()};
+    }
+    return Config.StartColor;
 }
 
+float ParticleManager::SpawnParticles_Size(const ParticleSimulatorConfig& Config)
+{
+    if (Config.IsRandomScale)
+    {
+        return Commons::Utility::RandomFloat(Config.Scale.x, Config.Scale.y);
+    }
+    return Config.Scale.x;
+}
+
+float ParticleManager::SpawnParticles_LifeTime(const ParticleSimulatorConfig& Config)
+{
+    if (Config.IsRandomLifeTime)
+    {
+        return Commons::Utility::RandomFloat(Config.LifeTime.x, Config.LifeTime.y);
+    }
+    return Config.LifeTime.x;
+}
 void ParticleManager::UpdateParticleColor(const uint32_t StartParticleIndex, const uint32_t Count,
                                           const glm::vec3& StartColor, const glm::vec3& EndColor)
 {

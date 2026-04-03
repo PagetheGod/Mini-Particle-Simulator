@@ -106,8 +106,7 @@ struct ParticleSimulatorConfig
     };
     glm::vec2 LifeTime = glm::vec2(1.f, 2.f); // Min and max life time
     glm::vec2 Scale = glm::vec2(1.f, 2.f); // Min and max scale
-    float BaseSpeedMin = 1.f;
-    float BaseSpeedMax = 1.f;
+    glm::vec2 Speed = glm::vec2(1.f, 2.f); // Min and max speed at spawn
     float Gravity = 0.8f; // The factor by which we scale 9.81, not gravity itself
     ForceConfig ForceConfigData;
     // Put the single-byte members at the end so we don't waste space due to paddings
@@ -232,11 +231,20 @@ private:
     void UpdateParticlePositionForAxis_Scalar(float* StartParticlePtr, uint32_t Count, const float* Velocity,
     float DeltaTime);
     void CheckParticleLifeTime();
-    // Particle spawn functions for each shape
-    void SpawnParticles_Sphere(const ParticleSimulatorConfig& Config, const float DeltaTime);
-    void SpawnParticles_BoxPlane(const ParticleSimulatorConfig& Config, const float DeltaTime);
-    void SpawnParticles_RingDisc(const ParticleSimulatorConfig& Config, const float DeltaTime);
-    void SpawnParticles_Cylinder(const ParticleSimulatorConfig& Config, const float DeltaTime);
+    // Particle spawn functions for each shape — these only set position
+    void SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
+        const float DeltaTime);
+    void SpawnParticles_BoxPlane(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
+        const float DeltaTime);
+    void SpawnParticles_RingDisc(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
+        const float DeltaTime);
+    void SpawnParticles_Cylinder(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
+        const float DeltaTime);
+    // Shared spawn helpers — shape-independent properties
+    glm::vec3 SpawnParticles_Speed(float X, float Y, float Z, const ParticleSimulatorConfig& Config);
+    glm::vec3 SpawnParticles_Color(const ParticleSimulatorConfig& Config);
+    float SpawnParticles_Size(const ParticleSimulatorConfig& Config);
+    float SpawnParticles_LifeTime(const ParticleSimulatorConfig& Config);
 
     // Force solvers - these will get dispatched by the UpdateParticle function
     void SolveGravity(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime);
