@@ -8,10 +8,12 @@
 #include "imgui_impl_sdlrenderer3.h"
 #include <iostream>
 #include "SDL3/SDL_render.h"
+#include "glm/exponential.hpp"
 //Own headers
 #include "SoftwareRenderer.hpp"
 #include "Commons.hpp"
-#include "glm/exponential.hpp"
+#include "Camera2D.hpp"
+
 
 
 SoftwareRenderer::SoftwareRenderer() : m_Renderer(nullptr), m_Window(nullptr)
@@ -83,6 +85,8 @@ void SoftwareRenderer::BeginFrame(const bool IsPanelOpen)
     // This starts the a new imgui frame, starting at this point
     // we can submit commands to imgui until we call endframe or render
     ImGui::NewFrame();
+
+    RenderParticles(IsPanelOpen);
 }
 
 void SoftwareRenderer::EndFrame()
@@ -209,9 +213,42 @@ void SoftwareRenderer::RenderParticles(const bool IsPanelOpen)
     for (uint32_t i = 0; i < m_ParticleManager->GetParticleCount(); i++)
     {
         // Transform particles' world positions into screen positions via 2D camera
-        float ScreenX = 0.f;
-        float ScreenY = 0.f;
+        const glm::vec3 WorldPoS = m_ParticleManager->GetParticlePos(i);
+        const glm::vec2 ScreenPos = m_Camera->WorldToScreen(WorldPoS.x, WorldPoS.y, VpRect);
+
+        // Scale the particle
+        const float ScreenSize = m_ParticleManager->GetParticleScale(i) * m_Camera->GetZoom();
+
+        // Cull particles that are outside the viewport so we don't send
+        // unnecessary draw calls
+        if (IsOutsideViewport(ScreenSize, ScreenPos, VpRect))
+        {
+            continue;
+        }
+        // Modify our earlier Gaussian texture so it's tinted by particle's colors
+        const glm::vec3 ParticleColor = m_ParticleManager->GetParticleColor(i);
+        SDL_SetTextureColorModFloat(m_ParticleTexture, ParticleColor.r, ParticleColor.g, ParticleColor.b);
+
+        // Do the same for alpha, we do not store the alpha values explicitly
+        // We calculate it using the relative lifetime
+        const float ParticleRelLifeTime = m_ParticleManager->GetParticleRelLifeTime(i);
+        SDL_SetTextureAlphaModFloat(m_ParticleTexture, 1.f - ParticleRelLifeTime);
+
+        // Destination rect, it's a rectangle stored in floats
+        // I think of it as a representation of the region that our particle covers
+        SDL_FRect ParticleDest = {ScreenPos.x - ScreenSize * 0.5f, ScreenPos.y - ScreenSize * 0.5f,
+            ScreenSize, ScreenSize};
+
+        // Draw the Gaussian texture onto the region we just defined
+        SDL_RenderTexture(m_Renderer, m_ParticleTexture, nullptr, &ParticleDest);
     }
+}
+
+bool SoftwareRenderer::IsOutsideViewport(const float ScreenSize,const glm::vec2& InPos,
+    const Commons::Layout::ViewportRect& InViewportRect)
+{
+    return (InPos.x + ScreenSize < InViewportRect.Width) || (InPos.y + ScreenSize < InViewportRect.Height) ||
+        (InPos.x - ScreenSize < 0.f) || (InPos.y - ScreenSize < 0.f);
 }
 
 

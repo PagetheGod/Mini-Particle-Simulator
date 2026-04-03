@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 
 // Own headers
+#include "Camera2D.hpp"
 #include "ParticleManager.hpp"
 
 
@@ -34,11 +35,14 @@ public:
 private:
     SDL_Texture* CreateGaussianGlowTexture(int Diameter);
     void RenderParticles(const bool IsPanelOpen);
+    bool IsOutsideViewport(const float ScreenSize, const glm::vec2& InPos, const Commons::Layout::ViewportRect&
+        InViewportRect);
 private:
     SDL_Renderer* m_Renderer;
     SDL_Window* m_Window;
     SDL_Texture* m_ParticleTexture;
     ParticleManager* m_ParticleManager;
+    std::unique_ptr<Camera2D> m_Camera;
 
     // Constants
     static constexpr int PARTICLE_TEXTURE_WIDTH = 64;

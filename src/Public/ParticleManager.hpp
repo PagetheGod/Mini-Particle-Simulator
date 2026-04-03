@@ -180,7 +180,8 @@ struct ParticleStates
 };
 
 
-class ParticleManager {
+class ParticleManager
+{
 public:
     //Constructors and destructors
     ParticleManager() = default;
@@ -206,7 +207,27 @@ public:
     //Getters and setters
     [[nodiscard]] uint32_t GetParticleCount() const {
         return m_ParticleCount;
-    };
+    }
+    [[nodiscard]] glm::vec3 GetParticlePos(uint32_t Index) const
+    {
+        return {m_ParticleStates.Px[Index], m_ParticleStates.Py[Index], m_ParticleStates.Pz[Index]};
+    }
+    [[nodiscard]] glm::vec3 GetParticleColor(uint32_t Index) const
+    {
+        return {m_ParticleStates.R[Index], m_ParticleStates.G[Index], m_ParticleStates.B[Index]};
+    }
+    [[nodiscard]] float GetParticleLifeTime(uint32_t Index) const
+    {
+        return m_ParticleStates.LifeTime[Index];
+    }
+    [[nodiscard]] float GetParticleScale(uint32_t Index) const
+    {
+        return m_ParticleStates.Size[Index];
+    }
+    [[nodiscard]] float GetParticleRelLifeTime(uint32_t Index) const
+    {
+        return m_ParticleStates.LifeTime[Index] / m_ParticleStates.MaxLifeTime[Index];
+    }
 public:
 
 private:
