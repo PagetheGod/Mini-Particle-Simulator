@@ -19,17 +19,18 @@
 UIManager::UIManager(std::function<void(bool SetLoopEnable)> InToggleLoopCallback) : m_ToggleLoopCallback(std::move(InToggleLoopCallback)){
 }
 
-void UIManager::UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorConfig& ParticleConfig,
+bool UIManager::UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorConfig& ParticleConfig,
     uint32_t ParticleCount)
 {
+    bool IsConfigDirty = false;
     // Settings panel
     if (!m_IsPanelOpen)
     {
         DrawPanelExpandButton();
-        return;
+        return IsConfigDirty;
     }
     DrawStatusBar(InDeltaTimeData, ParticleCount);
-    bool IsConfigDirty = GetParticleSimulatorConfig(ParticleConfig);
+    IsConfigDirty = GetParticleSimulatorConfig(ParticleConfig);
     // Draw the collapse button at last so it doesn't get drawn over by settings panel
     DrawPanelCollapseButton();
     return IsConfigDirty;

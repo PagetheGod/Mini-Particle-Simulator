@@ -26,7 +26,7 @@ public:
     ~UIManager() = default;
 
     //Actual work functions
-    void UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorConfig& ParticleConfig,
+    bool UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorConfig& ParticleConfig,
         uint32_t ParticleCount);
 
     //Getters and setters
