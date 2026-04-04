@@ -75,13 +75,28 @@ bool Application::Initialize() {
 	{
 		this->m_ShouldLoop = SetLoopEnable;
 	});
+
+	// Init the software renderer
+	m_SoftwareRenderer = std::make_unique<SoftwareRenderer>();
+	Result = m_SoftwareRenderer->Initialize(m_Window);
+	if (!Result)
+	{
+		std::cerr << "Failed to initialize software renderer!" << std::endl;
+		return Result;
+	}
+	// Construct and init the particle manager
+	m_ParticleManager = std::make_unique<ParticleManager>();
+	m_ParticleManager->InitializeParticles();
+
+
+	m_PlaybackLeft = PLAYBACK_DURATION;
     return true;
 }
 
 bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult& Input)
 {
 	ParticleSimulatorConfig ParticleConfig;
-
+	bool IsConfigDirty = false;
 	/*
 	 * Frame flow:
 	 * 1. Update FPS number - Done
@@ -95,8 +110,47 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	{
 		m_UIManager->TogglePanelOpen();
 	}
-	m_UIManager->UIFrame(InDeltaTimeData, ParticleConfig, m_ParticleManager->GetParticleCount());
+	IsConfigDirty = m_UIManager->UIFrame(InDeltaTimeData, ParticleConfig, m_ParticleManager->GetParticleCount());
+	if (!m_Paused)
+	{
+		/*
+		 * States here:
+		 * 1. Config is dirty, reset everything, call all updates and start a fresh playback
+		 * 2. Config isn't dirty, playback still has duration left, call update and play
+		 * 3. Config isn't dirty, playback has no duration left, we are not looping, do not update
+		 * and do not render
+		 * 4. Config isn't dirty, playback has no duration left, we are looping. Reset the playback left
+		 *  and start fresh
+		 */
+		if (IsConfigDirty)
+		{
+			m_PlaybackLeft = PLAYBACK_DURATION - InDeltaTimeData.DeltaTime;
+			m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, ParticleConfig, IsConfigDirty);
+			m_SoftwareRenderer->RenderFrame(m_UIManager->IsPanelOpen());
+		}
+		else
+		{
+			if (m_PlaybackLeft <= 0.f)
+			{
+				if (m_ShouldLoop)
+				{
+					m_PlaybackLeft = PLAYBACK_DURATION - InDeltaTimeData.DeltaTime;
+					m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, ParticleConfig, IsConfigDirty);
+					m_SoftwareRenderer->RenderFrame(m_UIManager->IsPanelOpen());
+				}
+			}
+			else
+			{
+				m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, ParticleConfig, IsConfigDirty);
+				m_SoftwareRenderer->RenderFrame(m_UIManager->IsPanelOpen());
+				m_PlaybackLeft -= InDeltaTimeData.DeltaTime;
+			}
+		}
 
+	}
+	// For now this function always return true since I haven't figured out a failure condition
+	// Once we do we will return false in those cases or just make this function void
+	return true;
 }
 
 bool Application::ShowStartupDialog()
@@ -294,12 +348,15 @@ void Application::Run()
 	 * It does the following every frame:
 	 * 1. Call input processing function. Check the results.
 	 * 2. Skip the frame and quit if user chose to exit, skip to the next frame if user chose to pause
+	 * Correction - pausing does not skip the entire frame, just the particle renderer's frame()
 	 * 3. Inform the ui manager if the user pressed tab to toggle the settings panel
 	 * 4. Once we are done with processing the above "special" input events, proceed to call Frame()
 	 * It also sends the frame function a delta time and input result struct which packs input informations
 	 */
 	bool Running = true;
 	DeltaTimeData DTData{};
+	// This config needs to persist through frame
+	// So we can easily check if any of the setting had changed
 	while (Running)
 	{
 		FrameTiming(DTData);

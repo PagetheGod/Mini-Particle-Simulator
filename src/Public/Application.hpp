@@ -84,8 +84,11 @@ private:
     bool m_IsPanelOpen = true;
     bool m_ShouldLoop = true;
     PlaybackState m_PlaybackState = PlaybackState::Stopped;
-    float m_EmitterLifeTime = 0.f;
+    float m_PlaybackLeft = 0.f;
     bool m_IsConfigDirty = false;
+    // Constants
+    // How long would we play the entire scene until we stop or loop
+    static constexpr float PLAYBACK_DURATION = 5.f;
 };
 
 

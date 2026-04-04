@@ -2,18 +2,22 @@
 // Created by YWvin on 2026/3/23.
 //
 
-#include "ParticleManager.hpp"
+
 #include <cstdlib>
 #include <iostream>
-
 #include "glm/gtc/random.hpp"
 #include "glm/gtx/common.inl"
 
+#include "ParticleManager.hpp"
 #ifdef _MSC_VER
 #define restrict __restrict
 #else
 #define restrict __restrict__
 #endif
+
+
+using namespace Commons;
+
 
 void ParticleManager::InitializeParticles()
 {
@@ -32,6 +36,9 @@ void ParticleManager::InitializeParticles()
     m_ParticleStates.Size = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
     m_ParticleStates.LifeTime = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
     m_ParticleStates.MaxLifeTime = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
+
+    // Start the thread pool, with 16 threads
+    m_VThreadPool = std::make_unique<VThreadPool>(NUM_THREADS_USED, true);
 }
 
 void ParticleManager::ParticleFrame(const float DeltaTime, const ParticleSimulatorConfig& Config,
@@ -41,10 +48,13 @@ void ParticleManager::ParticleFrame(const float DeltaTime, const ParticleSimulat
     if (IsConfigDirty)
     {
         m_ParticleCount = 0;
-        m_TimeSinceLastWind = 0.f;
+        memset(m_WindTimers, 0, sizeof(m_WindTimers));
         m_TimeSinceLastBurst = 0.f;
         m_BurstInterval = 0.f;
+        m_EmitterLifeTime = Config.EmitterLifeTime;
     }
+    SpawnParticles(Config, IsConfigDirty, DeltaTime);
+    UpdateParticles(Config, DeltaTime);
 }
 
 
@@ -53,11 +63,12 @@ void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, cons
     const float DeltaTime)
 {
     // We are already at limit, skip spawning for this frame
-    if (m_ParticleCount >= NUM_MAX_PARTICLES)
+    if (m_ParticleCount >= NUM_MAX_PARTICLES || m_EmitterLifeTime <= 0.f)
     {
         return;
     }
     uint32_t NumParticleSpawn = 0;
+    uint32_t NumParticlesPerThread = 0;
     if (Config.Mode == EmitterMode::Burst)
     {
         // Are we there to burst?
@@ -65,29 +76,185 @@ void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, cons
         if (m_TimeSinceLastBurst >= Config.BurstInterval)
         {
             // Calculate how many particles we got to spawn, rounding down
-            NumParticleSpawn += std::floor(static_cast<float>(Config.EmissionRate) * DeltaTime);
-        }
-        // Spawn all the particles or until we run into max particle count
-        for (uint32_t i = m_ParticleCount; i < NUM_MAX_PARTICLES && i < m_ParticleCount + NumParticleSpawn; i++)
-        {
-            // Spawning is pretty easy, just set the vals according to the config
+            NumParticleSpawn = std::min(NUM_MAX_PARTICLES - m_ParticleCount,
+                static_cast<uint32_t>(Config.EmissionRate));
+            NumParticlesPerThread = std::ceil(static_cast<float>(NumParticleSpawn) /
+                static_cast<float>(NUM_THREADS_USED));
+            // Reset timer
+            m_TimeSinceLastBurst = 0.f;
         }
     }
     else
     {
-
+        NumParticleSpawn = std::floor(static_cast<float>(Config.EmissionRate) * DeltaTime);
+        NumParticlesPerThread = std::ceil(static_cast<float>(NumParticleSpawn) /
+                static_cast<float>(NUM_THREADS_USED));
     }
+    // Dispatch spawn work to the thread pool in chunks
+    std::vector<std::future<void>> SpawnFutures;
+    for (uint32_t i = m_ParticleCount; i < NUM_MAX_PARTICLES && i < m_ParticleCount + NumParticleSpawn;
+        i += NumParticlesPerThread)
+    {
+        // Clamp the chunk size so we don't overshoot the spawn count or the max particle limit
+        const uint32_t ChunkEnd = std::min(i + NumParticlesPerThread, std::min(m_ParticleCount +
+            NumParticleSpawn, NUM_MAX_PARTICLES));
+        const uint32_t ChunkCount = ChunkEnd - i;
+        SpawnFutures.push_back(SpawnParticles_Dispatch(i, ChunkCount, Config, DeltaTime));
+    }
+    // Wait for all spawn tasks to finish before updating particle count
+    // Newly spawned particles must be fully initialized before UpdateParticles reads them
+    for (auto& Future : SpawnFutures)
+    {
+        Future.get();
+    }
+    m_ParticleCount = std::min(m_ParticleCount + NumParticleSpawn, NUM_MAX_PARTICLES);
+    m_EmitterLifeTime -= DeltaTime;
 }
 
-void ParticleManager::UpdateParticles(float DeltaTime, const bool IsConfigDirty)
+std::future<void> ParticleManager::SpawnParticles_Dispatch(uint32_t StartIndex, uint32_t Count,
+    const ParticleSimulatorConfig& Config, const float DeltaTime)
 {
-    // Call all the particle update functions in order
-    // As of right now, we will update drag before any other forces kick in
+    // Submit the spawn task to the thread pool by wrapping it in a lambda
+    // This way std::bind doesn't get confused and copy our ref params
+    switch (Config.Shape)
+    {
+        case SpawnShape::Sphere:
+        {
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            {
+                SpawnParticles_Sphere(StartIndex, Count, Config, DeltaTime);
+            });
+        }
+        case SpawnShape::Box:
+        {
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            {
+                SpawnParticles_BoxPlane(StartIndex, Count, Config, DeltaTime);
+            });
+        }
+        case SpawnShape::Cone:
+        {
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            {
+                SpawnParticles_Cone(StartIndex, Count, Config, DeltaTime);
+            });
+        }
+        case SpawnShape::Cylinder:
+        {
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            {
+                SpawnParticles_Cylinder(StartIndex, Count, Config, DeltaTime);
+            });
+        }
+        case SpawnShape::Ring:
+        {
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            {
+                SpawnParticles_RingDisc(StartIndex, Count, Config, DeltaTime);
+            });
+        }
+    }
+    // Should never reach here, all SpawnShape values handled above
+    return {};
+}
 
-    // Before we start, calculate the number of particles each thread has to process
-    const uint32_t NumParticlesPerThread = std::ceil(static_cast<float>(m_ParticleCount)
-        / static_cast<float>(NUM_THREADS_USED));
+void ParticleManager::UpdateParticles(const ParticleSimulatorConfig& Config, float DeltaTime)
+{
+    if (m_ParticleCount == 0)
+    {
+        return;
+    }
 
+    /*
+     * Update order:
+     * 1: Forces — modifies velocities, must complete before position updates
+     * 2: Colors, positions, lifetime — independent of each other, depend on forces being done
+     * 3: Kill dead particles — sequential sweep, kill and swap, must run after all threaded work
+     */
+
+    const uint32_t NumParticlesPerThread = static_cast<uint32_t>(std::ceil(
+        static_cast<float>(m_ParticleCount) / static_cast<float>(NUM_THREADS_USED)));
+
+    // Pre-compute wind influences on the main thread before threaded dispatch
+    // ComputeWindInfluence mutates per-force wind timers, so it cannot run per-chunk
+    glm::vec3 WindInfluences[Constants::MAX_NUM_FORCES] = {};
+    for (uint32_t i = 0; i < Config.ForceConfigData.ExtraForceCount; i++)
+    {
+        if (Config.ForceConfigData.ForceTypes[i] == ForceType::Directional)
+        {
+            // Pass the index as well so compute wind force can
+            // Check the oscillation timer specific to each wind force
+            WindInfluences[i] = ComputeWindInfluence(i,
+                Config.ForceConfigData.ForceDataArray[i].Strength,
+                Config.ForceConfigData.ForceDataArray[i].Direction,
+                Config.ForceConfigData.ForceDataArray[i].WindPeriod, DeltaTime);
+        }
+    }
+    const glm::vec3* WindPtr = WindInfluences;
+
+    // Solve forces
+    // Our custom thread pool returns a future object that can help synchronizations
+    // Put them all inside a vector so we can query them later
+    std::vector<std::future<void>> Futures;
+    const uint32_t FutureEstimate = m_ParticleCount / NumParticlesPerThread;
+    Futures.reserve(FutureEstimate);
+    for (uint32_t i = 0; i < m_ParticleCount; i += NumParticlesPerThread)
+    {
+        const uint32_t ChunkEnd = std::min(i + NumParticlesPerThread, m_ParticleCount);
+        const uint32_t ChunkCount = ChunkEnd - i;
+        Futures.push_back(m_VThreadPool->SubmitTask(
+            [this, i, ChunkCount, &Config, DeltaTime, WindPtr]()
+            {
+                SolveForces(i, ChunkCount, Config.ForceConfigData, DeltaTime, WindPtr);
+            }));
+    }
+    for (auto& Future : Futures)
+    {
+        // Get() will block until the thread is finished with the work
+        Future.get();
+    }
+    Futures.clear();
+
+    // Color, positions, and lifetime, these can also be synchronized
+    // These are independent per-particle but depend on forces being done
+
+    /*
+     * Note that we are doing all three together because this introduces less overhead
+     * If we separate these three, then we have to do three times the number of locks/unlocks
+     * condition_variables related sleep/waking, vector pushes...etc
+     */
+    for (uint32_t i = 0; i < m_ParticleCount; i += NumParticlesPerThread)
+    {
+        const uint32_t ChunkEnd = std::min(i + NumParticlesPerThread, m_ParticleCount);
+        const uint32_t ChunkCount = ChunkEnd - i;
+        Futures.push_back(m_VThreadPool->SubmitTask(
+            [this, i, ChunkCount, &Config, DeltaTime]()
+            {
+                // Color scaling over lifetime only if user asks for it
+                if (Config.IsScalingColor)
+                {
+                    UpdateParticleColor(i, ChunkCount, Config.StartColor, Config.EndColor);
+                }
+                // Positions, remember to call for all three axes
+                UpdateParticlePositionForAxis_Scalar(&m_ParticleStates.Px[i], ChunkCount,
+                    &m_ParticleStates.Vx[i], DeltaTime);
+                UpdateParticlePositionForAxis_Scalar(&m_ParticleStates.Py[i], ChunkCount,
+                    &m_ParticleStates.Vy[i], DeltaTime);
+                UpdateParticlePositionForAxis_Scalar(&m_ParticleStates.Pz[i], ChunkCount,
+                    &m_ParticleStates.Vz[i], DeltaTime);
+                // Lifetime
+                UpdateParticleLifeTime(i, ChunkCount, DeltaTime);
+            }));
+    }
+    for (auto& Future : Futures)
+    {
+        Future.get();
+    }
+
+    // Sweep, check, kill and then swap, this step has to be sequential
+    // Because we are swapping things
+    CheckParticleLifeTime();
+    CheckParticleY();
 }
 
 void ParticleManager::SolveGravity(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime)
@@ -102,15 +269,15 @@ void ParticleManager::SolveGravity(uint32_t StartParticleIndex, uint32_t Count, 
     }
 }
 
-glm::vec3 ParticleManager::ComputeWindInfluence(const float Strength, const glm::vec3& Direction,
-    const float Period, const float DeltaTime)
+glm::vec3 ParticleManager::ComputeWindInfluence(const uint32_t ForceIndex, const float Strength,
+    const glm::vec3& Direction, const float Period, const float DeltaTime)
 {
-    // Update wind timer — called once per frame, before dispatching SolveWind to threads
-    m_TimeSinceLastWind += DeltaTime;
+    // Each wind force has its own timer so multiple winds oscillate independently
+    m_WindTimers[ForceIndex] += DeltaTime;
     // Wrap to [0, Period) so this number doesn't grow forever
     constexpr float TWO_PI = glm::radians(360.f);
-    m_TimeSinceLastWind = glm::mod(m_TimeSinceLastWind, Period);
-    const float SinTime = m_TimeSinceLastWind * (TWO_PI / Period);
+    m_WindTimers[ForceIndex] = glm::mod(m_WindTimers[ForceIndex], Period);
+    const float SinTime = m_WindTimers[ForceIndex] * (TWO_PI / Period);
     return Direction * Strength * glm::sin(SinTime) * DeltaTime;
 }
 
@@ -185,9 +352,9 @@ void ParticleManager::SolveVortex(uint32_t StartParticleIndex, uint32_t Count, c
         TangentZ *= InverseDistance;
         RadialX *= InverseDistance;
         RadialZ *= InverseDistance;
-        // Scale tangents and radial vectors with the forces and add them to velocity
-        m_ParticleStates.Vx[i] += (TangentX * DtStrength + RadialX * DtPull);
-        m_ParticleStates.Vz[i] += (TangentZ * DtStrength + RadialZ * DtPull);
+        // Tangential spins around the axis, radial pulls toward the center (subtract = inward)
+        m_ParticleStates.Vx[i] += TangentX * DtStrength - RadialX * DtPull;
+        m_ParticleStates.Vz[i] += TangentZ * DtStrength - RadialZ * DtPull;
     }
 }
 
@@ -209,23 +376,22 @@ void ParticleManager::SolvePointForce(uint32_t StartParticleIndex, uint32_t Coun
      * i.e. different pointer variables pointing to the same memory, leading to data race and corruptions
      * the __restrict__ qualifier tells the compiler that two pointers are not pointing to
      * overlapping region in memory
-     * This part is tentative, will be changed later since restrict should work as qualifier in the function inputs
      */
-    float* __restrict__ ParticlePosX = m_ParticleStates.Px.get();
-    float* __restrict__ ParticlePosY = m_ParticleStates.Py.get();
-    float* __restrict__ ParticlePosZ = m_ParticleStates.Pz.get();
+    float* restrict PosX = m_ParticleStates.Px.get() + StartParticleIndex;
+    float* restrict PosY = m_ParticleStates.Py.get() + StartParticleIndex;
+    float* restrict PosZ = m_ParticleStates.Pz.get() + StartParticleIndex;
 
-    float* __restrict__ ParticleVelX = m_ParticleStates.Vx.get();
-    float* __restrict__ ParticleVelY = m_ParticleStates.Vy.get();
-    float* __restrict__ ParticleVelZ = m_ParticleStates.Vz.get();
+    float* restrict VelX = m_ParticleStates.Vx.get() + StartParticleIndex;
+    float* restrict VelY = m_ParticleStates.Vy.get() + StartParticleIndex;
+    float* restrict VelZ = m_ParticleStates.Vz.get() + StartParticleIndex;
 
     const float DtStrength = Strength * DeltaTime;
-    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
+    for (uint32_t i = 0; i < Count; i++)
     {
         // Get the three different components
-        float PointParticleX = m_ParticleStates.Px[i] - ForcePosition.x;
-        float PointParticleY = m_ParticleStates.Py[i] - ForcePosition.y;
-        float PointParticleZ = m_ParticleStates.Pz[i] - ForcePosition.z;
+        float PointParticleX = PosX[i] - ForcePosition.x;
+        float PointParticleY = PosY[i] - ForcePosition.y;
+        float PointParticleZ = PosZ[i] - ForcePosition.z;
         // Calculate distance square
         float DistanceSquare = PointParticleX * PointParticleX + PointParticleY * PointParticleY +
             PointParticleZ * PointParticleZ;
@@ -240,9 +406,9 @@ void ParticleManager::SolvePointForce(uint32_t StartParticleIndex, uint32_t Coun
         // Get the final influence by multiplying the force with fall off and dt
         const float PointInfluence = InverseDistanceSquare * DtStrength;
         // Add to the velocity components
-        m_ParticleStates.Vx[i] -= PointInfluence * PointParticleX;
-        m_ParticleStates.Vy[i] -= PointInfluence * PointParticleY;
-        m_ParticleStates.Vz[i] -= PointInfluence * PointParticleZ;
+        VelX[i] -= PointInfluence * PointParticleX;
+        VelY[i] -= PointInfluence * PointParticleY;
+        VelZ[i] -= PointInfluence * PointParticleZ;
 
     }
 }
@@ -295,8 +461,8 @@ void ParticleManager::KillParticle(const uint32_t KillIndex) {
 
 // Function that will update one component of particle positions
 // We pass it the component position array ptr, and the component velocity array ptr
-void ParticleManager::UpdateParticlePositionForAxis_Scalar(float* StartParticlePtr, uint32_t Count,
-    const float *Velocity, float DeltaTime)
+void ParticleManager::UpdateParticlePositionForAxis_Scalar(float* restrict StartParticlePtr, uint32_t Count,
+    const float* restrict Velocity, float DeltaTime)
 {
     for (uint32_t i = 0; i < Count; i++)
     {
@@ -318,6 +484,18 @@ void ParticleManager::CheckParticleLifeTime()
     }
 }
 
+void ParticleManager::CheckParticleY()
+{
+    // Go through all the particles, check their Y coordinates
+    // If it's smaller than our set kill Y, kill them
+    for (int i = static_cast<int>(m_ParticleCount - 1); i >= 0; i--)
+    {
+        if (m_ParticleStates.Py[i] <= KILL_Y)
+        {
+            KillParticle(i);
+        }
+    }
+}
 
 
 void ParticleManager::SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config, const float DeltaTime)
@@ -328,7 +506,10 @@ void ParticleManager::SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_
      * 3. A pitch angle, which measures how much we "pitch" down from the xz plane
      * This deviates a bit from the usual math notations
      */
-    using namespace Commons;
+    // Precompute the invariants for all particles within the sphere
+    constexpr float RMinCube = 0.1f * 0.1f * 0.1f;
+    const float RMaxCube = Config.SphereRadius * Config.SphereRadius * Config.SphereRadius;
+    const float Difference = RMaxCube - RMinCube;
     for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
     {
         /*
@@ -336,8 +517,15 @@ void ParticleManager::SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_
          * Because equal angular displacement does not create the same surface areas on a sphere
          * We need to account for that by sampling the sine of pitch uniformly
          * Otherwise, the poles get too dense and the equator looks sparse
+         *
+         * Additionally, because any of the sub spheres(or shells) within the sphere
+         * have volume that's proportional to the cube of radius
+         * We cannot just use radius here, we need to basically:
+         * 1. Generate a random number in range 0 to 1
+         * 2. Take the cube root of the number in 1
+         * 3. Scale the radius with it
          */
-        const float Radius = Utility::RandomFloat(0.1f, Config.SphereRadius);
+        const float Radius = std::cbrt(Utility::RandomFloat_01() * Difference + RMinCube);
         const float H = Utility::RandomFloat(-glm::pi<float>(), glm::pi<float>());
         const float SinP = Utility::RandomFloat(-1.f, 1.f);
         // Convert to Cartesian
@@ -367,7 +555,6 @@ void ParticleManager::SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_
 void ParticleManager::SpawnParticles_BoxPlane(uint32_t StartParticleIndex, uint32_t Count,
     const ParticleSimulatorConfig& Config, const float DeltaTime)
 {
-    using namespace Commons;
     // This one is more straightforward, just [-width, width), [-height, height), etc...
     for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
     {
@@ -397,13 +584,122 @@ void ParticleManager::SpawnParticles_BoxPlane(uint32_t StartParticleIndex, uint3
 void ParticleManager::SpawnParticles_RingDisc(uint32_t StartParticleIndex, uint32_t Count,
     const ParticleSimulatorConfig& Config, const float DeltaTime)
 {
-
+    // Same thing with cylinder, but now the RMin is provided by the user
+    // And we have no height
+    constexpr float AbsoluteRMinSquare = 0.1f * 0.1f;
+    const float RMinSquare = std::max(AbsoluteRMinSquare, Config.RingDimensions.x * Config.RingDimensions.x);
+    const float RMaxSquare = Config.RingDimensions.y * Config.RingDimensions.y;
+    const float Difference = RMaxSquare - RMinSquare;
+    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
+    {
+        const float Radius = glm::sqrt(Utility::RandomFloat_01() * Difference + RMinSquare);
+        const float Theta = Utility::RandomFloat(-glm::pi<float>(), glm::pi<float>());
+        // Convert to Cartesian
+        const float X = Radius * glm::cos(Theta);
+        const float Z = Radius * glm::sin(Theta);
+        m_ParticleStates.Px[i] = X;
+        m_ParticleStates.Py[i] = 0.f;
+        m_ParticleStates.Pz[i] = Z;
+        // Velocity, color, size, lifetime — shared across all shapes
+        const glm::vec3 Velocity = SpawnParticles_Speed(X, 0.f, Z, Config);
+        m_ParticleStates.Vx[i] = Velocity.x;
+        m_ParticleStates.Vy[i] = Velocity.y;
+        m_ParticleStates.Vz[i] = Velocity.z;
+        const glm::vec3 Color = SpawnParticles_Color(Config);
+        m_ParticleStates.R[i] = Color.r;
+        m_ParticleStates.G[i] = Color.g;
+        m_ParticleStates.B[i] = Color.b;
+        m_ParticleStates.Size[i] = SpawnParticles_Size(Config);
+        const float Life = SpawnParticles_LifeTime(Config);
+        m_ParticleStates.LifeTime[i] = Life;
+        m_ParticleStates.MaxLifeTime[i] = Life;
+    }
 }
 
 void ParticleManager::SpawnParticles_Cylinder(uint32_t StartParticleIndex, uint32_t Count,
     const ParticleSimulatorConfig& Config, const float DeltaTime)
 {
+    /*
+     * Again we use polar coordinates, but same issue with sphere
+     * So cannot use the radius naively since larger radius associates with larger volume
+     * So we do sqrt(random_01 * (Rmax^2 - Rmin^2) + Rmin^2)
+     * This gives uniform area distribution across the disc cross-section
+     */
+    constexpr float RMinSquare = 0.1f * 0.1f;
+    const float RMaxSquare = Config.CylinderDimensions.x * Config.CylinderDimensions.x;
+    const float Difference = RMaxSquare - RMinSquare;
+    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
+    {
+        const float Radius = glm::sqrt(Utility::RandomFloat_01() * Difference + RMinSquare);
+        const float Theta = Utility::RandomFloat(-glm::pi<float>(), glm::pi<float>());
+        // Height
+        const float Y = Utility::RandomFloat(0.f, Config.CylinderDimensions.y);
+        // Convert to Cartesian
+        const float X = Radius * glm::cos(Theta);
+        const float Z = Radius * glm::sin(Theta);
+        m_ParticleStates.Px[i] = X;
+        m_ParticleStates.Py[i] = Y;
+        m_ParticleStates.Pz[i] = Z;
+        // Velocity, color, size, lifetime — shared across all shapes
+        const glm::vec3 Velocity = SpawnParticles_Speed(X, Y, Z, Config);
+        m_ParticleStates.Vx[i] = Velocity.x;
+        m_ParticleStates.Vy[i] = Velocity.y;
+        m_ParticleStates.Vz[i] = Velocity.z;
+        const glm::vec3 Color = SpawnParticles_Color(Config);
+        m_ParticleStates.R[i] = Color.r;
+        m_ParticleStates.G[i] = Color.g;
+        m_ParticleStates.B[i] = Color.b;
+        m_ParticleStates.Size[i] = SpawnParticles_Size(Config);
+        const float Life = SpawnParticles_LifeTime(Config);
+        m_ParticleStates.LifeTime[i] = Life;
+        m_ParticleStates.MaxLifeTime[i] = Life;
+    }
 }
+
+void ParticleManager::SpawnParticles_Cone(uint32_t StartParticleIndex, uint32_t Count,
+    const ParticleSimulatorConfig& Config, const float DeltaTime)
+{
+    /*
+     * This one is computationally heavier since not much can be precomputed
+     * We first get a random_01, cube root it because cone volumes grow proportional to
+     * the cube of height
+     * Then at height H, using similar triangles, we get the RMaxAtH = tan(halfAngle) * H
+     * The cone opens upward (negative Y in screen space), tip at the origin
+     */
+    constexpr float HeightMinCube = 0.1f * 0.1f * 0.1f;
+    const float HeightMaxCube = Config.ConeDimensions.x * Config.ConeDimensions.x * Config.ConeDimensions.x;
+    const float Difference = HeightMaxCube - HeightMinCube;
+    // Half angle is stored in degrees from the UI slider, convert to radians for tan
+    const float TanHalfAngle = glm::tan(glm::radians(Config.ConeDimensions.y));
+    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
+    {
+        const float H = std::cbrt(Utility::RandomFloat_01() * Difference + HeightMinCube);
+        const float RMaxAtH = TanHalfAngle * H;
+        const float Rho = glm::sqrt(Utility::RandomFloat_01()) * RMaxAtH;
+        const float Theta = Utility::RandomFloat(-glm::pi<float>(), glm::pi<float>());
+        // Convert to Cartesian, cone axis is Y (upward), disc cross-section on XZ
+        const float X = Rho * glm::cos(Theta);
+        const float Y = -H;
+        const float Z = Rho * glm::sin(Theta);
+        m_ParticleStates.Px[i] = X;
+        m_ParticleStates.Py[i] = Y;
+        m_ParticleStates.Pz[i] = Z;
+        // Velocity, color, size, lifetime — shared across all shapes
+        const glm::vec3 Velocity = SpawnParticles_Speed(X, Y, Z, Config);
+        m_ParticleStates.Vx[i] = Velocity.x;
+        m_ParticleStates.Vy[i] = Velocity.y;
+        m_ParticleStates.Vz[i] = Velocity.z;
+        const glm::vec3 Color = SpawnParticles_Color(Config);
+        m_ParticleStates.R[i] = Color.r;
+        m_ParticleStates.G[i] = Color.g;
+        m_ParticleStates.B[i] = Color.b;
+        m_ParticleStates.Size[i] = SpawnParticles_Size(Config);
+        const float Life = SpawnParticles_LifeTime(Config);
+        m_ParticleStates.LifeTime[i] = Life;
+        m_ParticleStates.MaxLifeTime[i] = Life;
+    }
+}
+
 glm::vec3 ParticleManager::SpawnParticles_Speed(float X, float Y, float Z, const ParticleSimulatorConfig& Config)
 {
     float Speed = 0.f;
@@ -447,6 +743,51 @@ float ParticleManager::SpawnParticles_LifeTime(const ParticleSimulatorConfig& Co
     }
     return Config.LifeTime.x;
 }
+
+// Top level force solving function that will call the rest
+
+void ParticleManager::SolveForces(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
+    float DeltaTime, const glm::vec3* WindInfluences)
+{
+    // Deal with gravity first
+    SolveGravity(StartParticleIndex, Count, ForceConfigData.Gravity, DeltaTime);
+    for (uint32_t i = 0; i < ForceConfigData.ExtraForceCount; i++)
+    {
+        if (!ForceConfigData.IsForceEnabled[i])
+        {
+            continue;
+        }
+        switch (ForceConfigData.ForceTypes[i])
+        {
+            case ForceType::Drag:
+            {
+                SolveDrag(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Strength,
+                    DeltaTime);
+                break;
+            }
+            case ForceType::Directional:
+            {
+                // Wind influence was pre-computed in UpdateParticles (once per frame)
+                // to avoid the race condition on m_TimeSinceLastWind
+                SolveWind(StartParticleIndex, Count, WindInfluences[i]);
+                break;
+            }
+            case ForceType::Point:
+            {
+                SolvePointForce(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Direction,
+                    ForceConfigData.ForceDataArray[i].Strength, DeltaTime);
+                break;
+            }
+            case ForceType::Vortex:
+            {
+                SolveVortex(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Strength,
+                    ForceConfigData.ForceDataArray[i].VortexPull, DeltaTime, glm::vec3(0.f));
+                break;
+            }
+        }
+    }
+}
+
 void ParticleManager::UpdateParticleColor(const uint32_t StartParticleIndex, const uint32_t Count,
                                           const glm::vec3& StartColor, const glm::vec3& EndColor)
 {

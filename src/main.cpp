@@ -21,5 +21,5 @@ int main()
     {
         std::cerr << "Application failed to initialize!" << std::endl;
     }
-
+    App.Run();
 }

@@ -37,11 +37,11 @@ private:
     // Granular draw functions, each one of these will call other draw functions
     // Or draw some parts of the UI themselves
     void DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t ParticleCount) const;
-    void GetParticleSimulatorConfig(ParticleSimulatorConfig& Config);
-    void DrawSettingsPanel(ParticleSimulatorConfig& Config);
-    void DrawParticleInit(ParticleSimulatorConfig& Config);
-    void DrawParticleVisuals(ParticleSimulatorConfig& Config);
-    void DrawForceSettings(ForceConfig& ForceConfig);
+    bool GetParticleSimulatorConfig(ParticleSimulatorConfig& Config);
+    bool DrawSettingsPanel(ParticleSimulatorConfig& Config);
+    bool DrawParticleInit(ParticleSimulatorConfig& Config);
+    bool DrawParticleVisuals(ParticleSimulatorConfig& Config);
+    bool DrawForceSettings(ForceConfig& ForceConfig);
     void DrawPanelExpandButton();
     void DrawPanelCollapseButton();
 private:

@@ -26,14 +26,18 @@ public:
     // Returns true on success.
     bool Initialize(SDL_Window *window);
 
+    void RenderFrame(const bool IsPanelOpen);
+
+
     // Called at the start of each frame, before any ImGui calls.
+
     void BeginFrame(const bool IsPanelOpen);
 
     // Called after ImGui::Render(), draws ImGui + clears the background.
     void EndFrame();
 
 private:
-    SDL_Texture* CreateGaussianGlowTexture(int Diameter);
+    SDL_Texture* CreateGaussianGlowTexture(float Diameter);
     void RenderParticles(const bool IsPanelOpen);
     bool IsOutsideViewport(const float ScreenSize, const glm::vec2& InPos, const Commons::Layout::ViewportRect&
         InViewportRect);
@@ -45,6 +49,6 @@ private:
     std::unique_ptr<Camera2D> m_Camera;
 
     // Constants
-    static constexpr int PARTICLE_TEXTURE_WIDTH = 64;
-    static constexpr int PARTICLE_TEXTURE_HEIGHT = 64;
+    static constexpr float PARTICLE_TEXTURE_WIDTH = 64;
+    static constexpr float PARTICLE_TEXTURE_HEIGHT = 64;
 };

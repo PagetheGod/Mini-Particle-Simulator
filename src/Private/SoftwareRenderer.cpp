@@ -78,14 +78,19 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     return true;
 }
 
+void SoftwareRenderer::RenderFrame(const bool IsPanelOpen)
+{
+    BeginFrame(IsPanelOpen);
+    EndFrame(IsPanelOpen);
+}
+
 void SoftwareRenderer::BeginFrame(const bool IsPanelOpen)
 {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
-    // This starts the a new imgui frame, starting at this point
+    // This starts a new imgui frame, starting at this point
     // we can submit commands to imgui until we call endframe or render
     ImGui::NewFrame();
-
     RenderParticles(IsPanelOpen);
 }
 
@@ -138,7 +143,7 @@ void SoftwareRenderer::EndFrame()
     SDL_RenderPresent(m_Renderer);
 }
 
-SDL_Texture* SoftwareRenderer::CreateGaussianGlowTexture(int Diameter) {
+SDL_Texture* SoftwareRenderer::CreateGaussianGlowTexture(float Diameter) {
     /*
      * This function creates a circle-ish 64x64 texture with soft Gaussian fall off(alpha)
      * So it gives each particle a smoother, glowing appearance
