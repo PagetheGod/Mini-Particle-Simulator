@@ -77,18 +77,20 @@ private:
     std::unique_ptr<UIManager> m_UIManager;
     std::unique_ptr<ParticleManager> m_ParticleManager;
     InputManager m_InputManager;
+    Camera2D* m_Camera2D; // Raw ptr because we do not own it
     //States
     bool m_Running = false;
-    bool m_Paused = false;
+    bool m_Paused = true;
     bool m_IsLMBPressed = false;
     bool m_IsPanelOpen = true;
     bool m_ShouldLoop = true;
     PlaybackState m_PlaybackState = PlaybackState::Stopped;
     float m_PlaybackLeft = 0.f;
     bool m_IsConfigDirty = false;
+    ParticleSimulatorConfig m_ParticleConfig;
     // Constants
     // How long would we play the entire scene until we stop or loop
-    static constexpr float PLAYBACK_DURATION = 5.f;
+    static constexpr float PLAYBACK_DURATION = 10.f;
 };
 
 

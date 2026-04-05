@@ -50,7 +50,6 @@ void ParticleManager::ParticleFrame(const float DeltaTime, const ParticleSimulat
         m_ParticleCount = 0;
         memset(m_WindTimers, 0, sizeof(m_WindTimers));
         m_TimeSinceLastBurst = 0.f;
-        m_BurstInterval = 0.f;
         m_EmitterLifeTime = Config.EmitterLifeTime;
     }
     SpawnParticles(Config, IsConfigDirty, DeltaTime);
@@ -86,7 +85,10 @@ void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, cons
     }
     else
     {
-        NumParticleSpawn = std::floor(static_cast<float>(Config.EmissionRate) * DeltaTime);
+        // Similar, clamp spawn counts
+        NumParticleSpawn = std::min(
+            static_cast<uint32_t>(std::floor(static_cast<float>(Config.EmissionRate) * DeltaTime)),
+            NUM_MAX_PARTICLES - m_ParticleCount);
         NumParticlesPerThread = std::ceil(static_cast<float>(NumParticleSpawn) /
                 static_cast<float>(NUM_THREADS_USED));
     }
@@ -107,7 +109,7 @@ void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, cons
     {
         Future.get();
     }
-    m_ParticleCount = std::min(m_ParticleCount + NumParticleSpawn, NUM_MAX_PARTICLES);
+    m_ParticleCount += NumParticleSpawn;
     m_EmitterLifeTime -= DeltaTime;
 }
 
@@ -262,7 +264,8 @@ void ParticleManager::SolveGravity(uint32_t StartParticleIndex, uint32_t Count, 
     // Precompute scaled gravity's influences
     const float ScaledGravityInfluence = GravityScale * Commons::Constants::GRAVITY * DeltaTime;
 
-    // Gravity only affects Vy (vertical axis)
+    // Gravity pulls down in world space (negative Y direction)
+    // Camera2D flips Y when converting to screen space
     for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
     {
         m_ParticleStates.Vy[i] -= ScaledGravityInfluence;
@@ -531,7 +534,7 @@ void ParticleManager::SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_
         // Convert to Cartesian
         const float CosineP = glm::sqrt(1.f - SinP * SinP);
         const float X = Radius * CosineP * glm::sin(H);
-        const float Y = -Radius * SinP;
+        const float Y = Radius * SinP;
         const float Z = Radius * CosineP * glm::cos(H);
         m_ParticleStates.Px[i] = X;
         m_ParticleStates.Py[i] = Y;
@@ -594,11 +597,12 @@ void ParticleManager::SpawnParticles_RingDisc(uint32_t StartParticleIndex, uint3
     {
         const float Radius = glm::sqrt(Utility::RandomFloat_01() * Difference + RMinSquare);
         const float Theta = Utility::RandomFloat(-glm::pi<float>(), glm::pi<float>());
+        const float Y = Utility::RandomFloat(0.f, Config.RingDimensions.z);
         // Convert to Cartesian
         const float X = Radius * glm::cos(Theta);
         const float Z = Radius * glm::sin(Theta);
         m_ParticleStates.Px[i] = X;
-        m_ParticleStates.Py[i] = 0.f;
+        m_ParticleStates.Py[i] = Y;
         m_ParticleStates.Pz[i] = Z;
         // Velocity, color, size, lifetime — shared across all shapes
         const glm::vec3 Velocity = SpawnParticles_Speed(X, 0.f, Z, Config);
@@ -679,7 +683,7 @@ void ParticleManager::SpawnParticles_Cone(uint32_t StartParticleIndex, uint32_t 
         const float Theta = Utility::RandomFloat(-glm::pi<float>(), glm::pi<float>());
         // Convert to Cartesian, cone axis is Y (upward), disc cross-section on XZ
         const float X = Rho * glm::cos(Theta);
-        const float Y = -H;
+        const float Y = H;
         const float Z = Rho * glm::sin(Theta);
         m_ParticleStates.Px[i] = X;
         m_ParticleStates.Py[i] = Y;

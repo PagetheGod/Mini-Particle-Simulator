@@ -20,7 +20,7 @@ UIManager::UIManager(std::function<void(bool SetLoopEnable)> InToggleLoopCallbac
 }
 
 bool UIManager::UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorConfig& ParticleConfig,
-    uint32_t ParticleCount)
+    uint32_t ParticleCount, bool IsPaused)
 {
     bool IsConfigDirty = false;
     // Settings panel
@@ -29,18 +29,18 @@ bool UIManager::UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorC
         DrawPanelExpandButton();
         return IsConfigDirty;
     }
-    DrawStatusBar(InDeltaTimeData, ParticleCount);
+    DrawStatusBar(InDeltaTimeData, ParticleCount, IsPaused);
     IsConfigDirty = GetParticleSimulatorConfig(ParticleConfig);
     // Draw the collapse button at last so it doesn't get drawn over by settings panel
     DrawPanelCollapseButton();
     return IsConfigDirty;
 }
 
-void UIManager::DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t ParticleCount) const
+void UIManager::DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t ParticleCount, bool IsPaused) const
 {
     using namespace Commons::Layout;
     // Position: full width, at the bottom of the window
-    ImGui::SetNextWindowPos(ImVec2(0, WINDOW_HEIGHT - STATUS_BAR_HEIGHT));
+    ImGui::SetNextWindowPos(ImVec2(0, VIEWPORT_HEIGHT_OPEN));
     ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, STATUS_BAR_HEIGHT));
 
     // Window flags: no decorations, no interaction, no scrolling.
@@ -68,7 +68,15 @@ void UIManager::DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t Par
     {
         ImGui::Text("Particles: %u", ParticleCount);
     }
-    ImGui::Text("Pressed Space to toggle pause");
+    if (IsPaused)
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Simulation Paused");
+    }
+    else
+    {
+        ImGui::Text("Simulation Running");
+    }
+    ImGui::Text("Press Space to toggle pause");
     ImGui::End();
 }
 
@@ -180,23 +188,23 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
         IsConfigDirty |= ImGui::SliderFloat("Burst Interval", &Config.BurstInterval, 0.5f, 3.f);
         // We reuse the Emitter Rate variable for both burst and continuous emitter
         IsConfigDirty |= ImGui::SliderInt("Particle Count Per Burst", &Config.EmissionRate,
-            5, 5000);
+            5, 3500);
     }
     else
     {
         // These numbers are kinda arbitrary, might be better to define them in commons.hpp
         // As constants, however, since we are just using them here, it's ok for now
-        IsConfigDirty |= ImGui::SliderInt("Particle Per Second", &Config.EmissionRate, 50, 7500);
+        IsConfigDirty |= ImGui::SliderInt("Particle Per Second", &Config.EmissionRate, 50, 5000);
     }
 
     // Emitter lifetime - how long will our emitter spawn particles for
-    IsConfigDirty |= ImGui::SliderFloat("Emitter Lifetime", &Config.EmitterLifeTime, 0.5f, 5.f, "%.1f");
+    IsConfigDirty |= ImGui::SliderFloat("Emitter Lifetime", &Config.EmitterLifeTime, 0.5f, 10.f, "%.1f");
 
     // Spawn shape settings
     if (ImGui::CollapsingHeader("Emitter Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
         // Spawn shapes
-        const char* Shapes[] = {"Sphere", "Cone", "Box/Plane", "Ring/Disc", "Cylinder"};
+        const char* Shapes[] = {"Sphere", "Box/Plane", "Cone", "Ring/Disc", "Cylinder"};
         int CurrentShape = static_cast<int>(Config.Shape);
         if (ImGui::Combo("Shape", &CurrentShape, Shapes, IM_ARRAYSIZE(Shapes)))
         {
@@ -284,6 +292,8 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
                     0.f, 50.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Outer Radius", &Config.RingDimensions.y,
                     0.f, 50.f, "%.1f");
+                IsConfigDirty |= ImGui::SliderFloat("Height", &Config.RingDimensions.z,
+                    0.f, 100.f, "%.1f");
                 // Clamp the min to be smaller than max
                 if (Config.RingDimensions.x > Config.RingDimensions.y)
                 {
@@ -294,9 +304,9 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
             case SpawnShape::Cylinder:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Height", &Config.CylinderDimensions.y,
-                    0.f, 50.f, "%.1f");
+                    0.f, 80.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Radius", &Config.CylinderDimensions.x,
-                    0.f, 50.f, "%.1f");
+                    0.f, 80.f, "%.1f");
                 break;
             }
             default:
@@ -316,13 +326,13 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // Min and max base speed at spawn
             IsConfigDirty |= ImGui::SliderFloat("Min Particle Velocity at Spawn", &Config.Speed.x,
-                0.1f, 100.f);
+                0.f, 100.f);
             IsConfigDirty |= ImGui::SliderFloat("Max Particle Velocity at Spawn", &Config.Speed.y,
-                0.1f, 100.f);
+                0.f, 100.f);
             // Clamp
             if (Config.Speed.x >= Config.Speed.y)
             {
-                Config.Speed.x = Config.Speed.y - 0.1f;
+                Config.Speed.x = std::min(0.f, Config.Speed.y - 0.1f);
             }
         }
         else
@@ -347,7 +357,7 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
             // Remember to clamp!
             if (Config.LifeTime.x >= Config.LifeTime.y)
             {
-                Config.LifeTime.x = Config.LifeTime.y - 0.1f;
+                Config.LifeTime.x = std::max(0.f, Config.LifeTime.y - 0.1f);
             }
         }
         else
@@ -366,18 +376,18 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // Min and max scales of the particles
             IsConfigDirty |= ImGui::SliderFloat("Size Min", &Config.Scale.x,
-                0.1f, 10.f, "%.1f");
+                0.1f, 3.f, "%.1f");
             IsConfigDirty |= ImGui::SliderFloat("Size Max", &Config.Scale.y,
-                0.1f, 10.f, "%.1f");
+                0.1f, 3.f, "%.1f");
             if (Config.Scale.x >= Config.Scale.y)
             {
-                Config.Scale.x = Config.Scale.y - 0.1f;
+                Config.Scale.x = std::max(0.1f, Config.Scale.y - 0.1f);
             }
         }
         else
         {
             // No random interval for spawn size, just fixed
-            ImGui::SliderFloat("Size", &Config.Scale.x, 0.1f, 10.f, "%.1f");
+            IsConfigDirty |= ImGui::SliderFloat("Size", &Config.Scale.x, 0.1f, 3.f, "%.1f");
         }
         Config.IsRandomScale = IsRandomScale;
 
@@ -413,8 +423,8 @@ bool UIManager::DrawParticleVisuals(ParticleSimulatorConfig &Config)
      *   NoInputs     — hide all number inputs (wheel/square only)
      *   NoLabel      — hide the text label
      */
-    ImGuiColorEditFlags ColorEditorFlags = ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_DisplayRGB |
-        ImGuiColorEditFlags_DisplayHex | ImGuiColorEditFlags_Float;
+    ImGuiColorEditFlags ColorEditorFlags = ImGuiColorEditFlags_PickerHueBar | ImGuiColorEditFlags_DisplayRGB |
+        ImGuiColorEditFlags_Float;
     /*
      * Using ColorPicker3, this shows the entire picker widget, which takes up a lot of space
      * If there's too much visual clutter we will switch to ColorEdittor
@@ -608,9 +618,9 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                     case ForceType::Vortex:
                     {
                         IsConfigDirty |= ImGui::SliderFloat("Vortex Tangential Strength", &ForceDataRef.Strength,
-                            0.f, 20.f, "%.1f");
+                            0.f, 50.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Vortex Radial Strength", &ForceDataRef.VortexPull,
-                            0.f, 1.f, "%.1f");
+                            0.f, 50.f, "%.1f");
                         // For now, we limit the vortex to always be at y = 0
                         IsConfigDirty |= ImGui::DragFloat("Vertex Center X", &ForceDataRef.Direction.x, 0.1f, -5.f, 5.f);
                         IsConfigDirty |= ImGui::DragFloat("Vertex Center Z", &ForceDataRef.Direction.z, 0.1f, 0.f, 5.f);
@@ -619,7 +629,7 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                     case ForceType::Directional:
                     {
                         IsConfigDirty |= ImGui::SliderFloat("Wind Strength", &ForceDataRef.Strength,
-                            0.f, 10.f, "%.1f");
+                            0.f, 50.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Wind Period", &ForceDataRef.WindPeriod,
                              0.5f, 5.f, "%.1f Seconds");
                         IsConfigDirty |= ImGui::SliderFloat("Wind Direction X", &ForceDataRef.Direction.x,

@@ -82,14 +82,24 @@ add_executable(${PROJECT_NAME}
         src/Private/VulkanManager.cpp
         src/Private/VThreadPool.cpp
         src/Public/ParticlePresets.hpp
+        src/Private/Camera2D.cpp
 )
 
+# Conditionally compile SIMD.cpp only on x86-64
+# ARM (Apple Silicon) does not support x86 intrinsics
+if(IS_X86_64)
+    target_sources(${PROJECT_NAME} PRIVATE src/Private/SIMD.cpp)
+    # _xgetbv intrinsic (CPUID OS-support check) requires -mxsave on Clang/GCC
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
+    endif()
+endif()
 
 # Compiler warnings — strict but not pedantic
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(${PROJECT_NAME} PRIVATE
         -Wall -Wextra -Wpedantic
-        -Wno-unused_paramter # ImGui callbacks often have unused params
+        -Wno-unused-parameter # ImGui callbacks often have unused params
         -Wno-missing-field-initializers  # Vulkan structs use partial init
     )
 elseif(MSVC)

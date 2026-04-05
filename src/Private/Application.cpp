@@ -18,9 +18,11 @@
 #include "HardwareRenderer.hpp"
 #include "Commons.hpp"
 #include "ParticleManager.hpp"
+using namespace Commons;
+
 Application::Application() : m_Window(nullptr), m_RendererType(RendererType::Software),
 m_SoftwareRenderer(nullptr), m_HardwareRenderer(nullptr), m_UIManager(nullptr), m_ParticleManager(nullptr),
-m_InputManager(InputManager())
+m_InputManager(InputManager()), m_Camera2D(nullptr)
 {
 
 }
@@ -76,16 +78,20 @@ bool Application::Initialize() {
 		this->m_ShouldLoop = SetLoopEnable;
 	});
 
+	// Construct the particle manager
+	m_ParticleManager = std::make_unique<ParticleManager>();
+
 	// Init the software renderer
-	m_SoftwareRenderer = std::make_unique<SoftwareRenderer>();
+	m_SoftwareRenderer = std::make_unique<SoftwareRenderer>(m_ParticleManager.get());
 	Result = m_SoftwareRenderer->Initialize(m_Window);
 	if (!Result)
 	{
 		std::cerr << "Failed to initialize software renderer!" << std::endl;
 		return Result;
 	}
-	// Construct and init the particle manager
-	m_ParticleManager = std::make_unique<ParticleManager>();
+	// Set the camera ptr because we need it to do camera movements
+	m_Camera2D = m_SoftwareRenderer->GetCamera();
+	// Do the initialization of particle manager last because it requires lots of allocations
 	m_ParticleManager->InitializeParticles();
 
 
@@ -95,61 +101,71 @@ bool Application::Initialize() {
 
 bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult& Input)
 {
-	ParticleSimulatorConfig ParticleConfig;
-	bool IsConfigDirty = false;
 	/*
 	 * Frame flow:
-	 * 1. Update FPS number - Done
-	 * 2. Check if settings panel is collapsed, if it's, set the state in UIManager and update camera look at
-	 * 3. Call UIFrame(), this will update the UI and take care panel collapse/expansion
-	 * 4. Check if user did camera orbiting, if they did, update camera position and orientation
-	 * 5. Call ParticleFrame(), this will both spawn and update the particles
-	 * 6. Call RenderFrame(), passing it the camera object so the renderer has access to up-to-date view and projection matrix
+	 * 1. BeginFrame: must happen before any ImGui calls (calls ImGui::NewFrame)
+	 * 2. Handle input events (toggle panel, camera pan/zoom)
+	 * 3. UIFrame: submits all ImGui widgets, returns config dirty flag
+	 * 4. ParticleFrame: spawn and update particles (conditional on pause/playback)
+	 * 5. EndFrame: renders particles, presents ImGui, swaps buffers
+	 * BeginFrame and EndFrame run every frame unconditionally. Only particle
+	 * updates are gated by pause/playback state.
 	 */
+	const bool IsPanelOpen = m_UIManager->IsPanelOpen();
+
+	// BeginFrame starts the ImGui frame, must come before any widget calls
+	m_SoftwareRenderer->BeginFrame(IsPanelOpen);
+
+	// Handle input
 	if (Input.Event == InputEvent::ToggleViewport)
 	{
 		m_UIManager->TogglePanelOpen();
 	}
-	IsConfigDirty = m_UIManager->UIFrame(InDeltaTimeData, ParticleConfig, m_ParticleManager->GetParticleCount());
+	if (Input.Event == InputEvent::CameraPan)
+	{
+		m_Camera2D->Pan(Input.MouseDelta.x, Input.MouseDelta.y);
+	}
+	if (Input.Event == InputEvent::CameraZoom)
+	{
+		Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
+		m_Camera2D->ZoomAt(Input.ScrollDelta, Input.MousePosition.x, Input.MousePosition.y,
+			VpRect);
+	}
+
+	// UI, submits ImGui widgets between NewFrame and Render
+	// Accumulate dirty state with |= so changes made while paused aren't lost
+	// m_IsConfigDirty stays true until ParticleFrame actually processes it
+	m_IsConfigDirty |= m_UIManager->UIFrame(InDeltaTimeData, m_ParticleConfig, m_ParticleManager->GetParticleCount(), m_Paused);
+
+	// Particle updates, only when not paused and playback is active
 	if (!m_Paused)
 	{
-		/*
-		 * States here:
-		 * 1. Config is dirty, reset everything, call all updates and start a fresh playback
-		 * 2. Config isn't dirty, playback still has duration left, call update and play
-		 * 3. Config isn't dirty, playback has no duration left, we are not looping, do not update
-		 * and do not render
-		 * 4. Config isn't dirty, playback has no duration left, we are looping. Reset the playback left
-		 *  and start fresh
-		 */
-		if (IsConfigDirty)
+		if (m_IsConfigDirty)
 		{
 			m_PlaybackLeft = PLAYBACK_DURATION - InDeltaTimeData.DeltaTime;
-			m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, ParticleConfig, IsConfigDirty);
-			m_SoftwareRenderer->RenderFrame(m_UIManager->IsPanelOpen());
+			m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, m_ParticleConfig, m_IsConfigDirty);
+			m_IsConfigDirty = false;
+		}
+		else if (m_PlaybackLeft > 0.f)
+		{
+			m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, m_ParticleConfig, false);
+			m_PlaybackLeft -= InDeltaTimeData.DeltaTime;
+		}
+		else if (m_ShouldLoop)
+		{
+			// Pass dirty=true so ParticleFrame resets emitter lifetime and particle count
+			m_PlaybackLeft = PLAYBACK_DURATION - InDeltaTimeData.DeltaTime;
+			m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, m_ParticleConfig, true);
 		}
 		else
 		{
-			if (m_PlaybackLeft <= 0.f)
-			{
-				if (m_ShouldLoop)
-				{
-					m_PlaybackLeft = PLAYBACK_DURATION - InDeltaTimeData.DeltaTime;
-					m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, ParticleConfig, IsConfigDirty);
-					m_SoftwareRenderer->RenderFrame(m_UIManager->IsPanelOpen());
-				}
-			}
-			else
-			{
-				m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, ParticleConfig, IsConfigDirty);
-				m_SoftwareRenderer->RenderFrame(m_UIManager->IsPanelOpen());
-				m_PlaybackLeft -= InDeltaTimeData.DeltaTime;
-			}
+			m_PlaybackState = PlaybackState::Stopped;
 		}
-
 	}
-	// For now this function always return true since I haven't figured out a failure condition
-	// Once we do we will return false in those cases or just make this function void
+
+	// EndFrame renders particles, ImGui, and presents. Always runs.
+	m_SoftwareRenderer->EndFrame(IsPanelOpen);
+
 	return true;
 }
 
@@ -371,11 +387,6 @@ void Application::Run()
 		if (Result.Event == InputEvent::TogglePause)
 		{
 			m_Paused = !m_Paused;
-		}
-		// Toggle settings panel
-		if (Result.Event == InputEvent::ToggleViewport)
-		{
-			m_UIManager->TogglePanelOpen();
 		}
 		Frame(DTData, Result);
 	}

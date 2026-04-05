@@ -19,6 +19,7 @@ enum class InputEvent : uint8_t
 {
     NoOp,
     CameraOrbit,
+    CameraPan = CameraOrbit, // 2D alias, same underlying input (LMB drag), different semantics
     CameraZoom,
     TogglePause,
     ToggleViewport,
@@ -31,10 +32,12 @@ enum class InputEvent : uint8_t
  */
 struct InputResult
 {
-    // Mouse delta since last frame, for orbiting
+    // Mouse delta since last frame, for orbiting/panning
     glm::vec2 MouseDelta = glm::vec2(0.f);
-    // Scroll delta, for scrolling
-    float ScrollDelta;
+    // Current mouse position, for zoom-at-cursor,
+    glm::vec2 MousePosition = glm::vec2(0.f);
+    // Scroll delta, for zooming
+    float ScrollDelta = 0.f;
     InputEvent Event = InputEvent::NoOp;
 };
 

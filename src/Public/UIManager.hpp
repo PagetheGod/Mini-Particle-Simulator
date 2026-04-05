@@ -27,7 +27,7 @@ public:
 
     //Actual work functions
     bool UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorConfig& ParticleConfig,
-        uint32_t ParticleCount);
+        uint32_t ParticleCount, bool IsPaused);
 
     //Getters and setters
     [[nodiscard]] bool IsPanelOpen() const { return m_IsPanelOpen; }
@@ -36,7 +36,7 @@ public:
 private:
     // Granular draw functions, each one of these will call other draw functions
     // Or draw some parts of the UI themselves
-    void DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t ParticleCount) const;
+    void DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t ParticleCount, bool IsPaused) const;
     bool GetParticleSimulatorConfig(ParticleSimulatorConfig& Config);
     bool DrawSettingsPanel(ParticleSimulatorConfig& Config);
     bool DrawParticleInit(ParticleSimulatorConfig& Config);
@@ -47,6 +47,6 @@ private:
 private:
     bool m_IsPanelOpen = true;
     // It's a bandaid fix for the issue that we need the most up to date loop state
-    bool m_ShouldLoop = false;
+    bool m_ShouldLoop = true;
     std::function<void(bool)> m_ToggleLoopCallback;
 };

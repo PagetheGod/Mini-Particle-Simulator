@@ -101,7 +101,7 @@ struct ParticleSimulatorConfig
     {
         glm::vec3 BoxDimensions = glm::vec3(1.f); // Width, height, depth
         glm::vec2 ConeDimensions; // Height, spread(half-angle)
-        glm::vec2 RingDimensions; // Min and max radius
+        glm::vec3 RingDimensions; // Min and max radius, height
         glm::vec2 CylinderDimensions; // Radius, height
         float SphereRadius;
     };
@@ -309,17 +309,15 @@ private:
 
     // States trackers
     uint32_t m_ParticleCount = 0;
-    glm::vec3 m_EmitterPosition = glm::vec3(0.f);
     SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
     uint32_t m_SIMDWidth = 4;
     // Per-wind oscillation timers, we use the indices we already got for each force
     // To index into this
     float m_WindTimers[Commons::Constants::MAX_NUM_FORCES] = {};
     float m_TimeSinceLastBurst = 0.f;
-    float m_BurstInterval = 0.f;
     float m_EmitterLifeTime = 0.f;
     // Constants
-    static constexpr uint32_t NUM_MAX_PARTICLES = 65000;
+    static constexpr uint32_t NUM_MAX_PARTICLES = 55000;
     static constexpr uint32_t NUM_THREADS_USED = 16;
     static constexpr float KILL_Y = -1000.f;
 

@@ -10,10 +10,9 @@ using namespace Commons;
 glm::vec2 Camera2D::WorldToScreen(float WorldX, float WorldY, const Layout::ViewportRect& InViewportRect) const
 {
     glm::vec2 ScreenPos = glm::vec2(0.f);
-    // Transform to screen space, accounting for pan(left and right translation of the camera)
-    // And zoom
+    // Transform to screen space, accounting for pan and zoom
     ScreenPos.x = (WorldX - m_CameraPosX) * m_Zoom + InViewportRect.Width / 2.f;
-    ScreenPos.y = (WorldY - m_CameraPosY) * m_Zoom + InViewportRect.Height / 2.f;
+    ScreenPos.y = -(WorldY - m_CameraPosY) * m_Zoom + InViewportRect.Height / 2.f;
     return ScreenPos;
 }
 
@@ -21,7 +20,7 @@ glm::vec2 Camera2D::ScreenToWorld(float ScreenX, float ScreenY, const Layout::Vi
 {
     glm::vec2 WorldPos = glm::vec2(0.f);
     WorldPos.x = (ScreenX - InViewportRect.Width / 2.f) / m_Zoom + m_CameraPosX;
-    WorldPos.y = (ScreenY - InViewportRect.Height / 2.f) / m_Zoom + m_CameraPosY;
+    WorldPos.y = -(ScreenY - InViewportRect.Height / 2.f) / m_Zoom + m_CameraPosY;
     return WorldPos;
 }
 
@@ -30,7 +29,7 @@ void Camera2D::Pan(float ScreenDX, float ScreenDY)
     m_CameraPosX -= ScreenDX / m_Zoom;
     m_CameraPosX = std::clamp(m_CameraPosX, LEFTMOST_PAN, m_RightmostPan);
     m_CameraPosY -= ScreenDY / m_Zoom;
-    m_CameraPosY = std::clamp(m_CameraPosY, 0.f, Layout::VIEWPORT_HEIGHT_OPEN);
+    m_CameraPosY = std::clamp(m_CameraPosY, -Layout::VIEWPORT_HEIGHT_OPEN, Layout::VIEWPORT_HEIGHT_OPEN);
 }
 
 void Camera2D::ZoomAt(float ZoomDelta, float ScreenX, float ScreenY, Layout::ViewportRect& InViewportRect)

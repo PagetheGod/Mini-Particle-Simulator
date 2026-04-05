@@ -99,6 +99,7 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 				}
 				Result.Event = InputEvent::CameraZoom;
 				Result.ScrollDelta += Event.wheel.y; // In case multiple events come at a same time, we accumulate continuous events
+				Result.MousePosition = CursorPosition; // For zoom-at-cursor (2D path)
 				break;
 			}
 			// Mouse movement. Its event data stores both current pos and delta since LAST EVENT

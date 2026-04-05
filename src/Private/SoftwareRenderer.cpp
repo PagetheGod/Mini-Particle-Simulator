@@ -16,7 +16,8 @@
 
 
 
-SoftwareRenderer::SoftwareRenderer() : m_Renderer(nullptr), m_Window(nullptr)
+SoftwareRenderer::SoftwareRenderer(ParticleManager* InParticleManagerPtr) : m_Renderer(nullptr), m_Window(nullptr),
+m_ParticleTexture(nullptr), m_ParticleManager(InParticleManagerPtr), m_Camera(nullptr)
 {
 
 }
@@ -63,6 +64,11 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
 
     ImGui::StyleColorsDark();
 
+    // Scale ImGui for high-DPI displays — SDL3 gives us the display's
+    // content scale factor (e.g., 1.5 for 150% Windows scaling)
+    const float DpiScale = SDL_GetWindowDisplayScale(m_Window);
+    ImGuiIO.FontGlobalScale = DpiScale;
+
     // Initialize backends
     // The SDL3 platform backend handles input (mouse, keyboard, clipboard).
     // The SDLRenderer3 backend handles rendering ImGui's draw lists.
@@ -74,6 +80,8 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     {
         return false;
     }
+
+    m_Camera = std::make_unique<Camera2D>();
 
     return true;
 }
@@ -91,10 +99,9 @@ void SoftwareRenderer::BeginFrame(const bool IsPanelOpen)
     // This starts a new imgui frame, starting at this point
     // we can submit commands to imgui until we call endframe or render
     ImGui::NewFrame();
-    RenderParticles(IsPanelOpen);
 }
 
-void SoftwareRenderer::EndFrame()
+void SoftwareRenderer::EndFrame(const bool IsPanelOpen)
 {
     using namespace Commons;
     // End the current imgui frame, all draw data should be finalized at this point
@@ -111,7 +118,7 @@ void SoftwareRenderer::EndFrame()
     // SDL_SetRenderClipRect restricts ALL subsequent draw calls to
     // the given rectangle. This is the software equivalent of Vulkan's
     // VkScissor — particles physically cannot render outside this rect.
-    const Layout::ViewportRect VpRect = Layout::GetViewportRect(true);
+    const Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
     const float ScaleX = Layout::RENDER_WIDTH / VpRect.Width;
     const float ScaleY = Layout::RENDER_HEIGHT / VpRect.Height;
 
@@ -122,7 +129,7 @@ void SoftwareRenderer::EndFrame()
 
 
     // Draw particles ONLY in the viewport region:
-    //   draw_particles_software(renderer, particle_system, viewport);
+    RenderParticles(IsPanelOpen);
 
     // Remove the clip rect before drawing ImGui
     // ImGui needs to draw in the panel and status bar regions,
@@ -221,8 +228,9 @@ void SoftwareRenderer::RenderParticles(const bool IsPanelOpen)
         const glm::vec3 WorldPoS = m_ParticleManager->GetParticlePos(i);
         const glm::vec2 ScreenPos = m_Camera->WorldToScreen(WorldPoS.x, WorldPoS.y, VpRect);
 
-        // Scale the particle
-        const float ScreenSize = m_ParticleManager->GetParticleScale(i) * m_Camera->GetZoom();
+        // Scale the particle — multiply by BASE_PARTICLE_SCREEN_SIZE because config
+        // scale values (0.1-1.0) were designed for 3D projection, not direct pixel mapping
+        const float ScreenSize = m_ParticleManager->GetParticleScale(i) * m_Camera->GetZoom() * BASE_PARTICLE_SCREEN_SIZE;
 
         // Cull particles that are outside the viewport so we don't send
         // unnecessary draw calls
@@ -237,7 +245,7 @@ void SoftwareRenderer::RenderParticles(const bool IsPanelOpen)
         // Do the same for alpha, we do not store the alpha values explicitly
         // We calculate it using the relative lifetime
         const float ParticleRelLifeTime = m_ParticleManager->GetParticleRelLifeTime(i);
-        SDL_SetTextureAlphaModFloat(m_ParticleTexture, 1.f - ParticleRelLifeTime);
+        SDL_SetTextureAlphaModFloat(m_ParticleTexture, ParticleRelLifeTime);
 
         // Destination rect, it's a rectangle stored in floats
         // I think of it as a representation of the region that our particle covers
@@ -252,7 +260,7 @@ void SoftwareRenderer::RenderParticles(const bool IsPanelOpen)
 bool SoftwareRenderer::IsOutsideViewport(const float ScreenSize,const glm::vec2& InPos,
     const Commons::Layout::ViewportRect& InViewportRect)
 {
-    return (InPos.x + ScreenSize < InViewportRect.Width) || (InPos.y + ScreenSize < InViewportRect.Height) ||
+    return (InPos.x + ScreenSize > InViewportRect.Width) || (InPos.y + ScreenSize > InViewportRect.Height) ||
         (InPos.x - ScreenSize < 0.f) || (InPos.y - ScreenSize < 0.f);
 }
 

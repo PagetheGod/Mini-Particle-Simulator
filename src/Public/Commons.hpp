@@ -4,6 +4,11 @@
 #include <cstdint>
 #include <random>
 
+// MSVC doesn't define __BYTE_ORDER__ or __x86_64__ — PCG's endianness
+// detection fails. Windows on x86/x64/ARM is always little-endian.
+#if defined(_MSC_VER) && !defined(PCG_LITTLE_ENDIAN)
+    #define PCG_LITTLE_ENDIAN 1
+#endif
 #include "pcg_random.hpp"
 
 
@@ -21,6 +26,8 @@ namespace Commons
             // Generate a random float between min and max
             std::uniform_real_distribution<float> Distribution(Min, Max);
             return Distribution(RandomGenerator);
+
+            // Following logics are for MSVC because
         }
 
         // Use the above helper to get a float between 0 and 1
@@ -76,7 +83,7 @@ namespace Commons
         static constexpr float VIEWPORT_HEIGHT_OPEN = WINDOW_HEIGHT * VIEWPORT_PORTION_HEIGHT;
         // Panel dimensions
         static constexpr float PANEL_WIDTH = WINDOW_WIDTH - VIEWPORT_WIDTH_OPEN;
-        static constexpr float STATUS_BAR_HEIGHT = WINDOW_HEIGHT - VIEWPORT_PORTION_HEIGHT;
+        static constexpr float STATUS_BAR_HEIGHT = WINDOW_HEIGHT - VIEWPORT_HEIGHT_OPEN;
         // Derived: viewport sizes when panels are COLLAPSED
         static constexpr float VIEWPORT_COLLAPSED_WIDTH = static_cast<float>(WINDOW_WIDTH);  // 1920
         static constexpr float VIEWPORT_COLLAPSED_HEIGHT = static_cast<float>(WINDOW_HEIGHT); // 1080

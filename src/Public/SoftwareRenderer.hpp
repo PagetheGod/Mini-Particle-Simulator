@@ -14,7 +14,7 @@ class SoftwareRenderer
 {
 public:
     // Constructors and destructor
-    SoftwareRenderer();
+    SoftwareRenderer(ParticleManager* InParticleManagerPtr);
     SoftwareRenderer(const SoftwareRenderer&) = delete;
     SoftwareRenderer& operator=(const SoftwareRenderer&) = delete;
     SoftwareRenderer(SoftwareRenderer&&) = delete;
@@ -34,8 +34,14 @@ public:
     void BeginFrame(const bool IsPanelOpen);
 
     // Called after ImGui::Render(), draws ImGui + clears the background.
-    void EndFrame();
+    void EndFrame(const bool IsPanelOpen);
 
+    // Getters and setters
+    [[nodiscard]] Camera2D* GetCamera()
+    {
+        // This is not marked const because whoever gets this can modify camera 2D members
+        return m_Camera.get();
+    }
 private:
     SDL_Texture* CreateGaussianGlowTexture(float Diameter);
     void RenderParticles(const bool IsPanelOpen);
@@ -51,4 +57,6 @@ private:
     // Constants
     static constexpr float PARTICLE_TEXTURE_WIDTH = 64;
     static constexpr float PARTICLE_TEXTURE_HEIGHT = 64;
+    // World-scale to pixel-scale multiplier — a config scale of 1.0 renders as this many pixels
+    static constexpr float BASE_PARTICLE_SCREEN_SIZE = 2.f;
 };
