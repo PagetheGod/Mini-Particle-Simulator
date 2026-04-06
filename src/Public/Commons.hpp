@@ -4,12 +4,11 @@
 #include <cstdint>
 #include <random>
 
-// MSVC doesn't define __BYTE_ORDER__ or __x86_64__ — PCG's endianness
-// detection fails. Windows on x86/x64/ARM is always little-endian.
-#if defined(_MSC_VER) && !defined(PCG_LITTLE_ENDIAN)
-    #define PCG_LITTLE_ENDIAN 1
+// The PCG random lib I grabbed has virtually no MSVC support
+// So guarding against that
+#ifndef _MSC_VER
+    #include "pcg_random.hpp"
 #endif
-#include "pcg_random.hpp"
 
 
 namespace Commons
@@ -19,6 +18,7 @@ namespace Commons
         // Helper to generate a random floating point number between [Min, Max)
         static inline float RandomFloat(const float Min, const float Max)
         {
+        #ifndef _MSC_VER
             // Seed with a real random value if possible
             thread_local pcg_extras::seed_seq_from<std::random_device> SeedSource;
             // Make a random number engine
@@ -26,8 +26,14 @@ namespace Commons
             // Generate a random float between min and max
             std::uniform_real_distribution<float> Distribution(Min, Max);
             return Distribution(RandomGenerator);
-
-            // Following logics are for MSVC because
+            // Following logics are for MSVC because PCG does not support MSVC at all
+            // Come on man
+        #else
+            thread_local std::random_device RandomDevice;
+            std::uniform_real_distribution<float> Distribution(Min, Max);
+            thread_local std::mt19937 RandomGenerator(RandomDevice);
+            return Distribution(RandomGenerator);
+        #endif
         }
 
         // Use the above helper to get a float between 0 and 1

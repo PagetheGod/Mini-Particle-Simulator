@@ -46,11 +46,11 @@ private:
     float m_CameraPosX = 0.f;
     float m_CameraPosY = 0.f;
     // Zoom level. 1.0 = no zoom. 2.0 = 2x magnification. 0.5 = zoomed out.
-    float m_Zoom = 1.5f;
+    float m_Zoom = 2.f;
     float m_RightmostPan = Commons::Layout::VIEWPORT_WIDTH_OPEN;
 
     // Constants
-    static constexpr float MIN_ZOOM = 0.1f;
-    static constexpr float MAX_ZOOM = 3.f;
+    static constexpr float MIN_ZOOM = 1.f;
+    static constexpr float MAX_ZOOM = 5.f;
     static constexpr float LEFTMOST_PAN = -Commons::Layout::VIEWPORT_WIDTH_OPEN;
 };

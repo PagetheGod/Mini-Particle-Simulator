@@ -292,4 +292,12 @@ if(WIN32)
         COMMENT "Copying SDL3.dll to output directory"
         VERBATIM
     )
+    add_custom_command(
+        TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/external/imgui/misc/fonts/Roboto-Medium.ttf
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>
+        COMMENT "Copying Roboto-Medium.ttf to output directory"
+        VERBATIM
+    )
 endif()

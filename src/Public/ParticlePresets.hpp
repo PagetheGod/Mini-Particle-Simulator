@@ -10,8 +10,8 @@ namespace ParticlePresets
 {
     // Explosion from a point — particles fly outward in all directions
     static constexpr ParticleSimulatorConfig OmniDirectionalBurst {
-        .BurstInterval = 1.5f,
-        .EmissionRate = 300,
+        .BurstInterval = 1.f,
+        .EmissionRate = 1500,
         .EmitterLifeTime = 5.f,
         .StartColor = glm::vec3(0.9f, 0.6f, 0.2f),
         .EndColor = glm::vec3(0.9f, 0.6f, 0.2f),
@@ -72,30 +72,30 @@ namespace ParticlePresets
         .IsRandomSpeed = true
     };
 
-    // Particles spiral around a central axis — uses Sphere so particles have
+    // Particles spiral around a central axis — uses ring so particles have
     // vertical spread (Ring is purely XZ which is mostly invisible in 2D)
     static constexpr ParticleSimulatorConfig Vortex {
-        .EmissionRate = 300,
+        .EmissionRate = 500,
         .EmitterLifeTime = 5.f,
         .StartColor = glm::vec3(0.6f, 0.2f, 0.9f),
         .EndColor = glm::vec3(0.6f, 0.2f, 0.9f),
-        .RingDimensions = glm::vec3(5.f, 35.f, 20.f),
+        .ConeDimensions = glm::vec2(15.f, 30.f),
         .LifeTime = glm::vec2(3.f, 5.f),
         .Scale = glm::vec2(0.25f, 0.25f),
-        .Speed = glm::vec2(0.f, 35.f),
+        .Speed = glm::vec2(0.f, 0.2f),
         .Gravity = 0.2f,
         .ForceConfigData = {
             .Gravity = 0.f,
             .ForceDataArray = { ForceData{
                 .Direction = glm::vec3(0.f, 0.f, 0.f),
-                .Strength = 15.f,
-                .VortexPull = 0.85f
+                .Strength = 10.f,
+                .VortexPull = 15.f
             } },
             .ForceTypes = { ForceType::Vortex },
             .IsForceEnabled = { true },
             .ExtraForceCount = 1
         },
-        .Shape = SpawnShape::Ring,
+        .Shape = SpawnShape::Cone,
         .Mode = EmitterMode::Continuous,
         .IsRandomColor = false,
         .IsScalingColor = false,
@@ -106,7 +106,7 @@ namespace ParticlePresets
 
     // Wide sheet of particles cascading downward
     static constexpr ParticleSimulatorConfig Waterfall {
-        .EmissionRate = 500,
+        .EmissionRate = 1000,
         .EmitterLifeTime = 5.f,
         .StartColor = glm::vec3(0.4f, 0.7f, 1.f),
         .EndColor = glm::vec3(0.4f, 0.7f, 1.f),
@@ -127,7 +127,7 @@ namespace ParticlePresets
 
     // Gentle falling particles with slight wind
     static constexpr ParticleSimulatorConfig Snow {
-        .EmissionRate = 200,
+        .EmissionRate = 350,
         .EmitterLifeTime = 7.5f,
         .StartColor = glm::vec3(0.95f, 0.95f, 1.f),
         .EndColor = glm::vec3(0.95f, 0.95f, 1.f),
@@ -140,10 +140,10 @@ namespace ParticlePresets
             .Gravity = 0.3f,
             .ForceDataArray = { ForceData{
                 .Direction = glm::vec3(-0.5f, 0.f, 0.2f),
-                .Strength = 0.8f,
+                .Strength = 5.f,
                 .WindPeriod = 1.5f
-            } },
-            .ForceTypes = { ForceType::Directional },
+            } , ForceData{.Strength = 0.5f}},
+            .ForceTypes = { ForceType::Directional , ForceType::Drag},
             .IsForceEnabled = { true },
             .ExtraForceCount = 1
         },

@@ -64,10 +64,11 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
 
     ImGui::StyleColorsDark();
 
-    // Scale ImGui for high-DPI displays — SDL3 gives us the display's
-    // content scale factor (e.g., 1.5 for 150% Windows scaling)
+    // Load Roboto font at the correct size for the display's DPI scale.
+    // This produces sharp text at any scaling, unlike FontGlobalScale which
+    // just magnifies the default 13px bitmap font.
     const float DpiScale = SDL_GetWindowDisplayScale(m_Window);
-    ImGuiIO.FontGlobalScale = DpiScale;
+    ImGuiIO.Fonts->AddFontFromFileTTF("Roboto-Medium.ttf", 16.0f * DpiScale);
 
     // Initialize backends
     // The SDL3 platform backend handles input (mouse, keyboard, clipboard).

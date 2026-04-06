@@ -228,7 +228,7 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
             case SpawnShape::Cone:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Axis Length", &Config.ConeDimensions.x,
-                    0.1f, 10.f, "%.1f");
+                    0.1f, 20.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Half Angle", &Config.ConeDimensions.y,
                     0.5f, 45.f, "%.1f");
                 break;
@@ -339,7 +339,7 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // No random interval, just a fix speed
             IsConfigDirty |= ImGui::SliderFloat("Particle velocity at Spawn", &Config.Speed.x,
-                0.1f, 100.f);
+                0.f, 100.f);
         }
         Config.IsRandomSpeed = IsRandomSpeed;
 
@@ -387,7 +387,7 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         else
         {
             // No random interval for spawn size, just fixed
-            IsConfigDirty |= ImGui::SliderFloat("Size", &Config.Scale.x, 0.1f, 3.f, "%.1f");
+            IsConfigDirty |= ImGui::SliderFloat("Size", &Config.Scale.x, 0.1f, 2.f, "%.1f");
         }
         Config.IsRandomScale = IsRandomScale;
 
