@@ -28,10 +28,15 @@ SoftwareRenderer::~SoftwareRenderer()
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 
+    if (m_ParticleTexture)
+    {
+        SDL_DestroyTexture(m_ParticleTexture);
+    }
     if (m_Renderer)
     {
         SDL_DestroyRenderer(m_Renderer);
     }
+    m_ParticleTexture = nullptr;
     m_Renderer = nullptr;
 }
 
@@ -264,5 +269,4 @@ bool SoftwareRenderer::IsOutsideViewport(const float ScreenSize,const glm::vec2&
     return (InPos.x + ScreenSize > InViewportRect.Width) || (InPos.y + ScreenSize > InViewportRect.Height) ||
         (InPos.x - ScreenSize < 0.f) || (InPos.y - ScreenSize < 0.f);
 }
-
 

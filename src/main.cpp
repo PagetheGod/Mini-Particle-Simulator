@@ -20,6 +20,8 @@ int main()
     if (!App.Initialize())
     {
         std::cerr << "Application failed to initialize!" << std::endl;
+        return EXIT_FAILURE;
     }
     App.Run();
+    return EXIT_SUCCESS;
 }
