@@ -43,6 +43,15 @@ struct PushConstantType
 	float Padding2;
 };
 
+// A helper struct that wraps an allocated vulkan buffer
+// With additional information about its memory and size
+struct AllocatedVkBuffer
+{
+	VkBuffer VulkanBuffer = nullptr;
+	VkDeviceMemory VulkanDeviceMemory = nullptr;
+	VkDeviceSize VulkanBufferSize = 0;
+};
+
 // This class encapsulates all Vulkan-specific behaviors:
 // Initializing vulkan, loading shaders, issuing draw calls, etc.
 class VulkanManager
@@ -175,6 +184,11 @@ private:
 	bool CreateGraphicsPipeline();
 	bool CreateCommandPool();
 	bool AllocateCommandBuffers();
+	AllocatedVkBuffer CreateBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage, VkMemoryPropertyFlags Properties);
+	void GPUCopyBuffer(VkBuffer SrcBuffer, VkBuffer DstBuffer, VkDeviceSize Size);
+	AllocatedVkBuffer CreateBufferWithData(const void* Data, VkDeviceSize Size, VkBufferUsageFlags Usage);
+	void DestroyBuffer(AllocatedVkBuffer& VulkanBuffer);
+
 	bool CreateSyncObjects();
 	bool CleanUpContext();
 

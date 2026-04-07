@@ -40,6 +40,8 @@ struct PushConstantType
 	float Padding2;
 };
 
+
+
 // This class will manage vulkan side bussiness
 // Initializing vulkan, loading shaders, issuing draw calls, etc.
 class HardwareRenderer
@@ -199,6 +201,24 @@ private:
 	// Device extensions we require. Every device must support these.
 	// VK_KHR_SWAPCHAIN_EXTENSION_NAME is needed to present images to the screen.
 	const std::vector<const char*> DEVICE_EXTENSIONS = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+	// Constants
+	/*
+	 * An array that contains the six vertices of the two triangles that make up a single particle
+	 * Similar to what I did back in DX11, when we use instance rendering with something like particles
+	 * You create a small "vertex buffer" like this and the GPU shaders will use the instance buffer
+	 * to handle the actual transforms
+	 */
+	static constexpr float QuadVertices[] = {
+		// First triangle
+		-1.f, -1.f, // Bottom left
+		1.f, 1.f, // Top right
+		-1.f, 1.f, // Top left
+		// Second triangle
+		-1.f, -1.f, // Bottom left
+		1.f, -1.f, // Bottom right
+		1.f, 1.f // Top right
+	};
 };
 
 

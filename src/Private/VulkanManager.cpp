@@ -22,7 +22,15 @@ VulkanManager::~VulkanManager() {
 
 bool VulkanManager::Initialize()
 {
-    return true;
+    bool Result = false;
+    Result = CreateInstance();
+    if (!Result)
+    {
+        std::cerr << "CreateInstance failed: " << '\n';
+        return Result;
+    }
+
+    return Result;
 }
 
 
@@ -999,6 +1007,147 @@ bool VulkanManager::AllocateCommandBuffers()
     return true;
 }
 
+AllocatedVkBuffer VulkanManager::CreateBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage,
+    VkMemoryPropertyFlags Properties)
+{
+    AllocatedVkBuffer Buffer;
+    Buffer.VulkanBufferSize = Size;
+
+    // Create the buffer object, same deal as before, fill in the create info
+    VkBufferCreateInfo BufferCreateInfo = {};
+    BufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    BufferCreateInfo.usage = Usage;
+    BufferCreateInfo.size = Size;
+    BufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult Result = vkCreateBuffer(m_VulkanContext.VulkanDevice, &BufferCreateInfo,
+        nullptr, &Buffer.VulkanBuffer);
+    if (Result != VK_SUCCESS)
+    {
+        std::cerr << "Failed to create buffer! VkResult: " << Result << '\n';
+        return Buffer;
+    }
+
+    /*
+     * Allocate the actual memory for the buffer
+     * At this point the buffer has no existing place in the memory yet
+     * So we need to check its memory requirements and allocate the memory
+     * Like who designed this part, what "create buffer" function does not allocate the memory ITSELF???
+     */
+    VkMemoryRequirements BufferMemoryRequirements;
+    vkGetBufferMemoryRequirements(m_VulkanContext.VulkanDevice, Buffer.VulkanBuffer, &BufferMemoryRequirements);
+
+    // Fill in the create info and allocate the buffer
+    VkMemoryAllocateInfo MemoryAllocateInfo = {};
+    MemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    MemoryAllocateInfo.allocationSize = BufferMemoryRequirements.size;
+    MemoryAllocateInfo.memoryTypeIndex = FindMemoryType(m_VulkanContext.VulkanPhysicalDevice,
+        BufferMemoryRequirements.memoryTypeBits, Properties);
+
+    Result = vkAllocateMemory(m_VulkanContext.VulkanDevice, &MemoryAllocateInfo,
+        nullptr, &Buffer.VulkanDeviceMemory);
+    if (Result != VK_SUCCESS)
+    {
+        std::cerr << "Failed to allocate memory! VkResult: " << Result << '\n';
+        // Destroy the buffer
+        vkDestroyBuffer(m_VulkanContext.VulkanDevice, Buffer.VulkanBuffer, nullptr);
+        // Set the buffer ptr to nullptr
+        Buffer.VulkanBuffer = nullptr;
+        return Buffer;
+    }
+
+    // Bind the actual memory to the buffer
+    vkBindBufferMemory(m_VulkanContext.VulkanDevice, Buffer.VulkanBuffer, Buffer.VulkanDeviceMemory, 0);
+
+    return Buffer;
+}
+
+void VulkanManager::GPUCopyBuffer(VkBuffer SrcBuffer, VkBuffer DstBuffer, VkDeviceSize Size)
+{
+    // Create a temporary command buffer for the transfer
+
+    VkCommandBufferAllocateInfo CommandBufferAllocateInfo = {};
+    CommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    CommandBufferAllocateInfo.commandPool = m_VulkanContext.CommandPool;
+    CommandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    CommandBufferAllocateInfo.commandBufferCount = 1;
+
+    VkCommandBuffer CopyCommandBuffer;
+    vkAllocateCommandBuffers(m_VulkanContext.VulkanDevice, &CommandBufferAllocateInfo, &CopyCommandBuffer);
+
+    VkCommandBufferBeginInfo CommandBufferBeginInfo = {};
+    CommandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    // This flag tells vulkan that we use the command buffer for a one time submission
+    // So vulkan can do some optimizations since we won't reuse this(less states, less memory usage)
+    CommandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(CopyCommandBuffer, &CommandBufferBeginInfo);
+
+    VkBufferCopy CopyRegion = {};
+    CopyRegion.size = Size;
+    vkCmdCopyBuffer(CopyCommandBuffer, SrcBuffer, DstBuffer, 1, &CopyRegion);
+
+    vkEndCommandBuffer(CopyCommandBuffer);
+
+    // Submit the command buffer and wait
+    // Wait because vkQueueWaitIdle will block CPU until the GPU is done
+    // This is ok for one time memory transfer
+    VkSubmitInfo SubmitInfo = {};
+    SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    SubmitInfo.commandBufferCount = 1;
+    SubmitInfo.pCommandBuffers = &CopyCommandBuffer;
+
+    vkQueueSubmit(m_VulkanContext.GraphicsQueue, 1, &SubmitInfo, nullptr);
+    vkQueueWaitIdle(m_VulkanContext.GraphicsQueue);
+
+    vkFreeCommandBuffers(m_VulkanContext.VulkanDevice, m_VulkanContext.CommandPool, 1, &CopyCommandBuffer);
+}
+
+// This function creates a device-local buffer with initial data in it
+// We can use such buffers for user staging(fancy way to say preping some data for later use by the GPU I guess)
+AllocatedVkBuffer VulkanManager::CreateBufferWithData(const void* Data, VkDeviceSize Size, VkBufferUsageFlags Usage)
+{
+    // Create a staging buffer with CPU write
+    AllocatedVkBuffer StagingBuffer = CreateBuffer(Size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (StagingBuffer.VulkanBuffer == nullptr)
+    {
+        return StagingBuffer;
+    }
+
+    // Similar to DX11, we have to first map a buffer before putting data into it
+    void* MappedPtr;
+    vkMapMemory(m_VulkanContext.VulkanDevice, StagingBuffer.VulkanDeviceMemory, 0, Size, 0, &MappedPtr);
+    memcpy(MappedPtr, Data, Size);
+    // Remember to unmap
+    vkUnmapMemory(m_VulkanContext.VulkanDevice, StagingBuffer.VulkanDeviceMemory);
+
+    // Create the device local buffer, this is the buffer that lives on the GPU
+    // And it's the destination of all these transfer operations
+    AllocatedVkBuffer DeviceLocalBuffer = CreateBuffer(Size, Usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (DeviceLocalBuffer.VulkanBuffer == nullptr)
+    {
+        return DeviceLocalBuffer;
+    }
+    // Use GPU to copy from the staging buffer
+    GPUCopyBuffer(StagingBuffer.VulkanBuffer, DeviceLocalBuffer.VulkanBuffer, Size);
+    // Free the staging buffer so it's a one time resource for this copying operation
+}
+
+// Small helper to clean up the custom AllocatedVkBuffer struct
+void VulkanManager::DestroyBuffer(AllocatedVkBuffer& VulkanBuffer)
+{
+    if (VulkanBuffer.VulkanBuffer)
+    {
+        vkDestroyBuffer(m_VulkanContext.VulkanDevice, VulkanBuffer.VulkanBuffer, nullptr);
+    }
+    if (VulkanBuffer.VulkanDeviceMemory)
+    {
+        vkFreeMemory(m_VulkanContext.VulkanDevice, VulkanBuffer.VulkanDeviceMemory, nullptr);
+    }
+}
+
 bool VulkanManager::CreateSyncObjects() {
     // These are similar to mutexes we learned in class
     m_VulkanContext.ImageAvailableSemaphores.resize(VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT);
@@ -1386,9 +1535,7 @@ void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint
         0, 0, nullptr,
         0, nullptr, 1, &ImageMemoryBarrier);
 
-    // =====================================================================
     // PASS B: ImGui → Swapchain (1920×1080)
-    // =====================================================================
     VkRenderPassBeginInfo RenderPassBeginInfo_B = {};
     RenderPassBeginInfo_B.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     RenderPassBeginInfo_B.renderPass = m_VulkanContext.SwapChainRenderPass;

@@ -19,7 +19,7 @@ struct VertexInput
 {
     // The n in position[n] is there so we can have multiple members with the same semantic
     // It helps the shader compiler to distinguish between members with the same semantic but different types or purposes
-    [[vk::location(0)]] float2 Position : POSITION0; // Particel billboard vertex position [-1, 1]
+    [[vk::location(0)]] float2 Position : POSITION0; // Particle billboard vertex position [-1, 1]
     [[vk::location(1)]] float3 InstancePos : POSITION1; // Particle center (world XY)
     [[vk::location(2)]] float4 InstanceColor : COLOR0; // Particle color (RGBA)
     [[vk::location(3)]] float InstanceSize : PSIZE; // Particle radius
