@@ -121,11 +121,12 @@ public:
 		OffscreenTarget OffScreen;
 
 
-		//Render pass & framebuffers
-		// - offscreen.render_pass (Pass A): particles → offscreen image
-		//  loadOp=CLEAR, finalLayout=TRANSFER_SRC_OPTIMAL
-		// - swapchain_render_pass (Pass B): ImGui → swapchain image
-		//  loadOp=LOAD, finalLayout=PRESENT_SRC_KHR
+		/* Render pass & framebuffers
+		 * Offscreen.render_pass (Pass A): particles → offscreen image
+		 * loadOp=CLEAR, finalLayout=TRANSFER_SRC_OPTIMAL
+		 * Swapchain_render_pass (Pass B): ImGui → swapchain image
+		 * loadOp=LOAD, finalLayout=PRESENT_SRC_KHR
+		 */
 		VkRenderPass SwapChainRenderPass = nullptr;
 		std::vector<VkFramebuffer> FrameBuffers;
 
