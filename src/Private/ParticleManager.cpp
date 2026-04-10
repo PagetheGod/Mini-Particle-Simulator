@@ -911,7 +911,9 @@ void ParticleManager::SolveGravity(float *StartParticlePtr, uint32_t Count, floa
 /*
  * I decided to add custom SIMD implementations of point and vortex force solvers
  * because after pasting our scalar versions into godbolt
- * It seems that even with __restrict__ qualifiers and the
+ * It seems that even with __restrict__ qualifiers and O3 optimization level
+ * Clang still generates many extra instructions to check whether pointers overlap at run time
+ * Which is a waste
  */
 
 template <SIMDLevel Level>
