@@ -64,6 +64,8 @@ namespace Commons
         static constexpr uint8_t MAX_NUM_FORCES = 9;
         // Gravity!!!
         static constexpr float GRAVITY = 9.81f;
+        // Custom epsilon since the one used by GLM is really small
+        static constexpr float CUSTOM_EPSILON = 0.00001f;
 
     }
     namespace Layout

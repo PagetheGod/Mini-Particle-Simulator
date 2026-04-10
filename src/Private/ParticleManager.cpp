@@ -37,12 +37,16 @@ void ParticleManager::InitializeParticles()
     m_ParticleStates.LifeTime = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
     m_ParticleStates.MaxLifeTime = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
 
-    // Start the thread pool, with 16 threads
+    // Start the thread pool, with 16 threads, thread pool already has clamping logics
     m_VThreadPool = std::make_unique<VThreadPool>(NUM_THREADS_USED, true);
+    // Initialize the SIMD manager and get back the SIMD levels and widths
+    m_SIMDManager = SIMDManager();
+    m_SIMDLevel = m_SIMDManager.GetSIMDLevel();
 }
 
 void ParticleManager::ParticleFrame(const float DeltaTime, const ParticleSimulatorConfig& Config,
-    const bool IsConfigDirty) {
+    const bool IsConfigDirty)
+{
     // If config is dirty(user changed things), killed all particles, restart render
     // Reset all state trackers
     if (IsConfigDirty)
@@ -778,14 +782,28 @@ void ParticleManager::SolveForces(uint32_t StartParticleIndex, uint32_t Count, c
             }
             case ForceType::Point:
             {
+                // SIMD version on x86, scalar fallback on ARM
+            #if defined(__x86_64__) || defined(_M_X64)
+                SolvePointForce_Vector<SIMDLevel::SSE2>(StartParticleIndex, Count,
+                    ForceConfigData.ForceDataArray[i].Direction,
+                    ForceConfigData.ForceDataArray[i].Strength, DeltaTime);
+            #else
                 SolvePointForce(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Direction,
                     ForceConfigData.ForceDataArray[i].Strength, DeltaTime);
+            #endif
                 break;
             }
             case ForceType::Vortex:
             {
+                // SIMD version on x86, scalar fallback on ARM (templates guarded)
+            #if defined(__x86_64__) || defined(_M_X64)
+                SolveVortex_Vector<SIMDLevel::SSE2>(StartParticleIndex, Count,
+                    ForceConfigData.ForceDataArray[i].Strength,
+                    ForceConfigData.ForceDataArray[i].VortexPull, DeltaTime, glm::vec3(0.f));
+            #else
                 SolveVortex(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Strength,
                     ForceConfigData.ForceDataArray[i].VortexPull, DeltaTime, glm::vec3(0.f));
+            #endif
                 break;
             }
         }
@@ -887,6 +905,177 @@ void ParticleManager::SolveGravity(float *StartParticlePtr, uint32_t Count, floa
     for (; i < Count; i++)
     {
         StartParticlePtr[i] += ScaledGravityInfluence;
+    }
+}
+
+/*
+ * I decided to add custom SIMD implementations of point and vortex force solvers
+ * because after pasting our scalar versions into godbolt
+ * It seems that even with __restrict__ qualifiers and the
+ */
+
+template <SIMDLevel Level>
+void ParticleManager::SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count,
+    const glm::vec3& ForcePosition, const float Strength, const float DeltaTime)
+{
+    using SIMDStruct = SIMDTraits<Level>;
+    constexpr uint32_t SIMDWidth = SIMDStruct::SIMDWidth;
+    const float DtStrength = Strength * DeltaTime;
+    // Broadcast the attractor/repulsor position components to three lanes
+    auto PointPositionX = SIMDStruct::VectorizedBroadcast(ForcePosition.x);
+    auto PointPositionY = SIMDStruct::VectorizedBroadcast(ForcePosition.y);
+    auto PointPositionZ = SIMDStruct::VectorizedBroadcast(ForcePosition.z);
+    // Broadcast strength
+    auto StrengthVec = SIMDStruct::VectorizedBroadcast(DtStrength);
+
+
+    // Broadcast a small epsilon to prevent div by 0 explosions
+    // Using our own epsilon here since the glm one is a bit too small
+    auto Epsilon = SIMDStruct::VectorizedBroadcast(0.00001f);
+
+    uint32_t i = StartParticleIndex;
+    for (; i + SIMDWidth <= StartParticleIndex + Count; i += SIMDWidth)
+    {
+        // Pre component vectorized subtractions
+        auto DeltaX = SIMDStruct::VectorizedSub(PointPositionX, SIMDStruct::VectorizedLoad(&m_ParticleStates.Px[i]));
+        auto DeltaY = SIMDStruct::VectorizedSub(PointPositionY, SIMDStruct::VectorizedLoad(&m_ParticleStates.Py[i]));
+        auto DeltaZ = SIMDStruct::VectorizedSub(PointPositionZ, SIMDStruct::VectorizedLoad(&m_ParticleStates.Pz[i]));
+        // Next step, calculate the distance square
+        // We do some ugly chaining here because we don't use the + operators
+        auto XYSquareSum = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedMul(DeltaX, DeltaX),
+            SIMDStruct::VectorizedMul(DeltaY, DeltaY));
+        auto DistSquare = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedMul(DeltaZ, DeltaZ), XYSquareSum);
+        // Clamp DistSquare to epsilon BEFORE computing the inverse. Without this, a
+        // particle sitting exactly on the attractor would give rsqrt(0) = +inf, which
+        // then propagates NaN through the normalization and poisons the velocity
+        // permanently. Since NaN propagates through every subsequent op, one unlucky
+        // particle would stay dead forever.
+        DistSquare = SIMDStruct::VectorizedMax(DistSquare, Epsilon);
+        auto InverseDistance = SIMDStruct::VectorizedRSqrt(DistSquare);
+        // Use the inverse distance calculated above
+        auto InverseDistSquare= SIMDStruct::VectorizedMul(InverseDistance, InverseDistance);
+        // Normalize all delta components
+        DeltaX = SIMDStruct::VectorizedMul(DeltaX, InverseDistance);
+        DeltaY = SIMDStruct::VectorizedMul(DeltaY, InverseDistance);
+        DeltaZ = SIMDStruct::VectorizedMul(DeltaZ, InverseDistance);
+        // Calculate strength times delta time times inverse dist square
+        auto ForceInfluence = SIMDStruct::VectorizedMul(StrengthVec, InverseDistSquare);
+        // Granular operations to do +=, first load the original values, then add
+        auto AdjustedVx = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vx[i]);
+        auto AdjustedVy = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vy[i]);
+        auto AdjustedVz = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vz[i]);
+        // Then scale all the normalized delta components and add, then store
+        AdjustedVx = SIMDStruct::VectorizedAdd(AdjustedVx, SIMDStruct::VectorizedMul(DeltaX, ForceInfluence));
+        AdjustedVy = SIMDStruct::VectorizedAdd(AdjustedVy, SIMDStruct::VectorizedMul(DeltaY, ForceInfluence));
+        AdjustedVz = SIMDStruct::VectorizedAdd(AdjustedVz, SIMDStruct::VectorizedMul(DeltaZ, ForceInfluence));
+
+        SIMDStruct::VectorizedStore(&m_ParticleStates.Vx[i], AdjustedVx);
+        SIMDStruct::VectorizedStore(&m_ParticleStates.Vy[i], AdjustedVy);
+        SIMDStruct::VectorizedStore(&m_ParticleStates.Vz[i], AdjustedVz);
+    }
+    // Scalar clean up — matches the SIMD body's sign convention (Force - Particle, +=)
+    // and its epsilon (0.00001f), so cross-validation between the two code paths can
+    // be bit-exact up to the rsqrt approximation error.
+    for (; i < StartParticleIndex + Count; i++)
+    {
+        // Delta = ForcePosition - ParticlePosition (points FROM particle TO attractor)
+        float DeltaX = ForcePosition.x - m_ParticleStates.Px[i];
+        float DeltaY = ForcePosition.y - m_ParticleStates.Py[i];
+        float DeltaZ = ForcePosition.z - m_ParticleStates.Pz[i];
+        // Calculate distance square, clamped to the same epsilon as the SIMD path
+        float DistanceSquare = DeltaX * DeltaX + DeltaY * DeltaY + DeltaZ * DeltaZ;
+        DistanceSquare = std::max(DistanceSquare, Constants::CUSTOM_EPSILON);
+        const float InverseDistanceSquare = 1.f / DistanceSquare;
+        const float InverseDistance = std::sqrt(InverseDistanceSquare);
+        // Normalize the delta by multiplying by 1/r
+        DeltaX *= InverseDistance;
+        DeltaY *= InverseDistance;
+        DeltaZ *= InverseDistance;
+        // Proper inverse-square force magnitude: Strength * dt / r^2
+        const float PointInfluence = InverseDistanceSquare * DtStrength;
+        // Velocity += ForceMag * NormalizedDelta. Delta points toward attractor, so
+        // += pulls the particle inward (attraction).
+        m_ParticleStates.Vx[i] += PointInfluence * DeltaX;
+        m_ParticleStates.Vy[i] += PointInfluence * DeltaY;
+        m_ParticleStates.Vz[i] += PointInfluence * DeltaZ;
+    }
+}
+
+template <SIMDLevel Level>
+void ParticleManager::SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength,
+    const float VortexPull, const float DeltaTime, const glm::vec3& VortexCenter)
+{
+    // SIMD version of the vortex solver
+    using SIMDStruct = SIMDTraits<Level>;
+    constexpr uint32_t SIMDWidth = SIMDStruct::SIMDWidth;
+    const float DtStrength = VortexStrength * DeltaTime;
+    const float DtPull     = VortexPull * DeltaTime;
+
+    // Precompute and pre-load
+    auto DtStrengthVec = SIMDStruct::VectorizedBroadcast(DtStrength);
+    auto DtPullVec = SIMDStruct::VectorizedBroadcast(DtPull);
+    auto CenterXVec = SIMDStruct::VectorizedBroadcast(VortexCenter.x);
+    auto CenterZVec = SIMDStruct::VectorizedBroadcast(VortexCenter.z);
+
+    auto Epsilon = SIMDStruct::VectorizedBroadcast(Constants::CUSTOM_EPSILON);
+
+    uint32_t i = StartParticleIndex;
+    for (; i + SIMDWidth <= StartParticleIndex + Count; i += SIMDWidth)
+    {
+        // Radial components
+        auto RadialX = SIMDStruct::VectorizedSub(
+            SIMDStruct::VectorizedLoad(&m_ParticleStates.Px[i]), CenterXVec);
+        auto RadialZ = SIMDStruct::VectorizedSub(
+            SIMDStruct::VectorizedLoad(&m_ParticleStates.Pz[i]), CenterZVec);
+
+        // Distance square
+        auto DistSquare = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedMul(RadialX, RadialX),
+            SIMDStruct::VectorizedMul(RadialZ, RadialZ));
+        DistSquare = SIMDStruct::VectorizedMax(DistSquare, Epsilon);
+
+        // Again, this only have 12-bit precision, probably good enough for our scale
+        auto InverseDist = SIMDStruct::VectorizedRSqrt(DistSquare);
+
+        // Normalize the radial components first, so we can use normalized ones
+        // To directly get normalized tangents
+        RadialX = SIMDStruct::VectorizedMul(RadialX, InverseDist);
+        RadialZ = SIMDStruct::VectorizedMul(RadialZ, InverseDist);
+
+        auto TangentX = RadialZ;
+        auto TangentZ = SIMDStruct::VectorizedSub(SIMDStruct::VectorizedZero(), RadialX);
+
+        // Velocity update, tangent used for vortex strength, radial for pull
+        auto DeltaVx = SIMDStruct::VectorizedSub(SIMDStruct::VectorizedMul(TangentX, DtStrengthVec),
+            SIMDStruct::VectorizedMul(RadialX,  DtPullVec));
+        auto DeltaVz = SIMDStruct::VectorizedSub(SIMDStruct::VectorizedMul(TangentZ, DtStrengthVec),
+            SIMDStruct::VectorizedMul(RadialZ,  DtPullVec));
+
+        // Load existing velocity, accumulate, store back
+        auto AdjustedVx = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedLoad(&m_ParticleStates.Vx[i]),
+            DeltaVx);
+        auto AdjustedVz = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedLoad(&m_ParticleStates.Vz[i]),
+            DeltaVz);
+        SIMDStruct::VectorizedStore(&m_ParticleStates.Vx[i], AdjustedVx);
+        SIMDStruct::VectorizedStore(&m_ParticleStates.Vz[i], AdjustedVz);
+    }
+
+    // Scalar cleanup
+    for (; i < StartParticleIndex + Count; i++)
+    {
+        float RadialX = m_ParticleStates.Px[i] - VortexCenter.x;
+        float RadialZ = m_ParticleStates.Pz[i] - VortexCenter.z;
+        float DistanceSquare = RadialX * RadialX + RadialZ * RadialZ;
+        DistanceSquare = std::max(DistanceSquare, Constants::CUSTOM_EPSILON);
+        const float InverseDistance = 1.f / std::sqrt(DistanceSquare);
+
+        // Normalize first, then derive tangent from the normalized radial
+        RadialX *= InverseDistance;
+        RadialZ *= InverseDistance;
+        const float TangentX = RadialZ;
+        const float TangentZ = -RadialX;
+
+        m_ParticleStates.Vx[i] += TangentX * DtStrength - RadialX * DtPull;
+        m_ParticleStates.Vz[i] += TangentZ * DtStrength - RadialZ * DtPull;
     }
 }
 

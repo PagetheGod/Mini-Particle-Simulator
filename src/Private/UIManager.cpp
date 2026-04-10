@@ -222,13 +222,13 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
             case SpawnShape::Sphere:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Radius", &Config.SphereRadius,
-                    0.1f, 10.f, "%.1f");
+                    0.1f, 50.f, "%.1f");
                 break;
             }
             case SpawnShape::Cone:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Axis Length", &Config.ConeDimensions.x,
-                    0.1f, 20.f, "%.1f");
+                    0.1f, 50.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Half Angle", &Config.ConeDimensions.y,
                     0.5f, 45.f, "%.1f");
                 break;
@@ -608,10 +608,10 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                     case ForceType::Point:
                     {
                         IsConfigDirty |= ImGui::SliderFloat("Point Force Strength", &ForceDataRef.Strength,
-                            -20.f, 20.f, "%.1f");
+                            -75.f, 75.f, "%.1f");
                         ImGui::Text("Positive Strength = attraction, Negative Strength = repulsion");
-                        IsConfigDirty |= ImGui::DragFloat("Position X", &ForceDataRef.Direction.x, 0.1f, -10.f, 10.f);
-                        IsConfigDirty |= ImGui::DragFloat("Position Y", &ForceDataRef.Direction.y, 0.1f, -5.f, 15.f);
+                        IsConfigDirty |= ImGui::DragFloat("Position X", &ForceDataRef.Direction.x, 0.1f, -20.f, 20.f);
+                        IsConfigDirty |= ImGui::DragFloat("Position Y", &ForceDataRef.Direction.y, 0.1f, -20.f, 20.f);
                         IsConfigDirty |= ImGui::DragFloat("Position Z", &ForceDataRef.Direction.z, 0.1f, 0.f, 20.f);
                         break;
                     }
@@ -629,7 +629,7 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                     case ForceType::Directional:
                     {
                         IsConfigDirty |= ImGui::SliderFloat("Wind Strength", &ForceDataRef.Strength,
-                            0.f, 50.f, "%.1f");
+                            0.f, 75.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Wind Period", &ForceDataRef.WindPeriod,
                              0.5f, 5.f, "%.1f Seconds");
                         IsConfigDirty |= ImGui::SliderFloat("Wind Direction X", &ForceDataRef.Direction.x,

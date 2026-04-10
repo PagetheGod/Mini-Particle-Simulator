@@ -301,11 +301,21 @@ private:
 
     template<SIMDLevel Level>
     void SolveGravity(float* StartParticlePtr, uint32_t Count, float GravityScale, float DeltaTime);
+
+    template<SIMDLevel Level>
+    void SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
+        const float Strength, const float DeltaTime);
+
+    template<SIMDLevel Level>
+    void SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
+        const float DeltaTime, const glm::vec3& VortexCenter);
+
     // Helper to create a float array aligned to specified boundary
     AlignedArray AllocateAlignedArray(size_t NumElements, size_t Alignment);
 private:
     ParticleStates m_ParticleStates;
     std::unique_ptr<VThreadPool> m_VThreadPool;
+    SIMDManager m_SIMDManager;
 
     // States trackers
     uint32_t m_ParticleCount = 0;

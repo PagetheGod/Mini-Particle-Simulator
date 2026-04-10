@@ -81,7 +81,7 @@ struct SIMDTraits<SIMDLevel::SSE2>
          * set1 = set all of the register to a single value, similar to broadcast?
          * ps = packed, single-precision floats(4 floats)
          */
-        return _mm_load_ps(SrcPtr);
+        return _mm_loadu_ps(SrcPtr);
     }
     // Set all of the wide register lanes to a single value(broadcast)
     static __m128 VectorizedBroadcast(const float& Val)
@@ -93,10 +93,14 @@ struct SIMDTraits<SIMDLevel::SSE2>
     {
         return _mm_setzero_ps();
     }
-    // Store 4 floats from an SSE 128-bit wide register into the memory location specified
+    // Store 4 floats from an SSE 128-bit wide register into the memory location specified.
+    // Using the unaligned variant (storeu) for the same reason as loadu above: when threads
+    // chunk the particle arrays, chunk boundaries may not fall on 16-byte-aligned indices,
+    // so the destination pointer is not guaranteed to be aligned. On modern CPUs (Nehalem+)
+    // storeu matches store-speed when the address happens to be aligned.
     static void VectorizedStore(float* DstPtr, __m128 SrcVector)
     {
-        _mm_store_ps(DstPtr, SrcVector);
+        _mm_storeu_ps(DstPtr, SrcVector);
     }
     // Add two register element by element, basically adding the contents of two 4-float wide register
     static __m128 VectorizedAdd(__m128 Lhs, __m128 Rhs)
@@ -134,6 +138,12 @@ struct SIMDTraits<SIMDLevel::SSE2>
     {
         return _mm_and_ps(Lhs, Rhs);
     }
+
+    // Per pair comparison, return the larger of the pairs
+    static __m128 VectorizedMax(__m128 Lhs, __m128 Rhs)
+    {
+        return _mm_max_ps(Lhs, Rhs);
+    }
 };
 
 // Same stuffs, just for AVX2
@@ -144,12 +154,12 @@ struct SIMDTraits<SIMDLevel::AVX2>
     // Load
     static __m256 VectorizedLoad(const float* SrcPtr)
     {
-        return _mm256_load_ps(SrcPtr);
+        return _mm256_loadu_ps(SrcPtr);
     }
-    // Store
+    // Store (unaligned — see SSE2 VectorizedStore for the rationale)
     static void VectorizedStore(float* DstPtr, __m256 SrcVector)
     {
-        _mm256_store_ps(DstPtr, SrcVector);
+        _mm256_storeu_ps(DstPtr, SrcVector);
     }
     // Broadcast
     static __m256 VectorizedBroadcast(const float& Val)
@@ -191,6 +201,12 @@ struct SIMDTraits<SIMDLevel::AVX2>
     {
         return _mm256_and_ps(Lhs, Rhs);
     }
+
+    // Max
+    static __m256 VectorizedMax(__m256 Lhs, __m256 Rhs)
+    {
+        return _mm256_max_ps(Lhs, Rhs);
+    }
 };
 
 // AVX512 variants
@@ -202,12 +218,12 @@ struct SIMDTraits<SIMDLevel::AVX512>
     // Load
     static __m512 VectorizedLoad(const float* SrcPtr)
     {
-        return _mm512_load_ps(SrcPtr);
+        return _mm512_loadu_ps(SrcPtr);
     }
-    // Store
+    // Store (unaligned — see SSE2 VectorizedStore for the rationale)
     static void VectorizedStore(float* DstPtr, __m512 SrcVector)
     {
-        _mm512_store_ps(DstPtr, SrcVector);
+        _mm512_storeu_ps(DstPtr, SrcVector);
     }
     // Broadcast
     static __m512 VectorizedBroadcast(float& Val)
@@ -250,6 +266,12 @@ struct SIMDTraits<SIMDLevel::AVX512>
     static __m512 VectorizedAnd(__m512 Lhs, __m512 Rhs)
     {
         return _mm512_and_ps(Lhs, Rhs);
+    }
+
+    // Max
+    static __m512 VectorizedMax(__m512 Lhs, __m512 Rhs)
+    {
+        return _mm512_max_ps(Lhs, Rhs);
     }
 };
 
