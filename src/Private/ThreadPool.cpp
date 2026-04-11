@@ -14,9 +14,9 @@ m_JobQueue(), m_KillThreads(false)
     // Initialize our member variables.
     // to pass thread_loop to a thread you need to specify the function as ThreadPool::thread_loop
     // and pass the first argument as `this`
-    num_threads = std::thread::hardware_concurrency() == 0 ? 4 : std::thread::hardware_concurrency();
-    // Clamp and leave 1 thread for other stuffs on the user's PC
-    num_threads = std::max(static_cast<size_t>(1), num_threads - 1);
+    // Respect the caller-provided thread count. Only clamp 0 up to 1 so the
+    // pool always has at least one worker.
+    num_threads = std::max(static_cast<size_t>(1), num_threads);
     for (size_t i = 0; i < num_threads; i++)
     {
         m_thread_vec.push_back(std::jthread(&ThreadPool::thread_loop, this));
