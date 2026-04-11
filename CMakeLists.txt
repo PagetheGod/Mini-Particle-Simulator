@@ -1,4 +1,4 @@
-#Requires cmake 4.2.3
+# Requires cmake 4.2.3
 cmake_minimum_required(VERSION 4.2.3)
 
 # Define project name and its languages
@@ -29,17 +29,18 @@ endif()
 
 
 
-#Output Directories, as it stands, this builds everything into a bin folder
+# Output Directories, as it stands, this builds everything into a bin folder
+# I would like it to be a less nested but sometimes less is more, CMake is not easy :(
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-#Tell CMake to build from source via submodule
+# Tell CMake to build from source via submodule
 
-# SDL3 — built from source via submodule
+# SDL3, built from source via submodule
 # add_subdirectory() tells CMake: "Go into external/SDL/, find its
 # CMakeLists.txt, and build it as part of our project."
-# EXCLUDE_FROM_ALL means "don't build SDL3's tests and examples — just
+# EXCLUDE_FROM_ALL means "don't build SDL3's tests and examples, just
 # the library itself."
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 # Add the subdirectory for glm, same deal, exclude from all tells CMake
@@ -57,7 +58,7 @@ find_package(Vulkan REQUIRED)
 
 
 # Our executable
-# add_executable() creates a build target called "particle_sim" from the
+# add_executable() creates a build target exe with the same name as our project from the
 # listed source files.
 add_executable(${PROJECT_NAME}
     src/main.cpp
@@ -93,7 +94,8 @@ if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
 endif()
 
-# Compiler warnings — strict but not pedantic
+# Compiler warnings, strict but not pedantic
+# Because many of the 3rd party stuffs will trigger warnings
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(${PROJECT_NAME} PRIVATE
         -Wall -Wextra -Wpedantic
@@ -106,7 +108,7 @@ endif()
 
 
 
-# Dear ImGui — compiled directly into the project
+# Dear ImGui, compiled directly into the project
 # ImGui is designed to be compiled as source files, not as a separate library.
 # We include the core files plus TWO backends:
 #   - imgui_impl_sdl3: handles input (mouse, keyboard, clipboard) via SDL3
@@ -119,11 +121,9 @@ set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/external/imgui)
 target_sources(${PROJECT_NAME} PRIVATE
     # Core ImGui
     ${IMGUI_DIR}/imgui.cpp
-    ${IMGUI_DIR}/imgui_demo.cpp       # Optional but useful for learning
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
-
     # Platform backend (always SDL3)
     ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
 
@@ -132,17 +132,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp         # GPU path
 )
 
-# Allows us to use these paths directly without having to specify
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${CMAKE_SOURCE_DIR}/src/Public
-    ${CMAKE_SOURCE_DIR}/src/ThirdParty/pcg/include
-)
-
-
-
 # Set up debug and release compiler options for all three compilers
+# Right now we are just supporting clang, but keeping this here for references
 target_compile_options(${PROJECT_NAME} PRIVATE
 	#MSVC
 	$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:/W4 /Od>
@@ -156,7 +147,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 )
 
 # Enables link time optimizations for all three compilers. Learned from my ray tracer that this can make a huge difference
-
+# Again, just using clang right now but keeping it here for references
 target_link_options(${PROJECT_NAME} PRIVATE
 	 $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/LTCG>
  	 $<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:-flto=auto>
@@ -182,6 +173,7 @@ message(STATUS "DXC compiler: ${DXC}")
 
 # Set the shader output path next to the executable
 set(SHADER_OUTPUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Shaders)
+
 
 # Define shader source files with DXC Profile, profile tells compiler what kind of shader are we working with
 # This creates a list, where each shader is associated with three items:
@@ -253,19 +245,25 @@ add_dependencies(${PROJECT_NAME} CompileShaders)
 
 # ---------------------------------------------------------------------------
 # Include directories
-# ---------------------------------------------------------------------------
 # target_include_directories() tells the compiler where to find header files
-# for our target. "PRIVATE" means these paths only apply to particle_sim,
-# not to anything that might link against particle_sim.
+# for our target. This way we do not have to say Public/<Header Path>, instead we
+# can just say #include <Header Path>, nice and simple
+# And if the IDE supports CMake this also allows the intellisense to work normally
+# with those includes.
+# PRIVATE means these paths only apply to the executable target
+# we added above not to anything that might link against particle_sim.
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${CMAKE_SOURCE_DIR}/src/Public
+    ${CMAKE_SOURCE_DIR}/src/ThirdParty/pcg/include
 )
 
-# ---------------------------------------------------------------------------
+
 # Link libraries
-# ---------------------------------------------------------------------------
 # target_link_libraries() tells the linker which libraries our executable
-# needs. SDL3::SDL3 is a CMake "imported target" that SDL3's build system
+# needs. SDL3::SDL3 is a CMake imported target that SDL3's build system
 # creates. It automatically handles include paths, library paths, and
 # linker flags. Vulkan::Vulkan does the same for the Vulkan SDK.
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -308,13 +306,15 @@ if(BUILD_TESTING)
     add_test(NAME core_tests COMMAND core_tests)
 endif()
 
-# ---------------------------------------------------------------------------
+
 # Windows: Copy SDL3.dll next to the executable
-# ---------------------------------------------------------------------------
 # On Windows, DLLs must be in the same directory as the .exe (or on PATH).
 # This post-build command copies SDL3.dll into our output directory
 # automatically after every build. On Linux, shared libraries are found
 # via the system's library search path, so this isn't needed.
+# Also, VERBATIM basically means that these commands get escaped properly to the
+# build tools so they can be invoked unchanged, CMake official documentations
+# recommend adding this to add_custom_command
 if(WIN32)
     add_custom_command(
         TARGET ${PROJECT_NAME} POST_BUILD

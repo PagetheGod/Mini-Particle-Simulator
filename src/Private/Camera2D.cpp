@@ -1,6 +1,3 @@
-//
-// Created by YWvin on 2026/4/1.
-//
 
 #include "Camera2D.hpp"
 #include <algorithm>

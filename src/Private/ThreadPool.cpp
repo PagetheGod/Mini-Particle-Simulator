@@ -1,8 +1,4 @@
-﻿//
-// Created by YWvin on 2026/3/29.
-//
-
-#include "../Public/ThreadPool.hpp"
+﻿#include "../Public/ThreadPool.hpp"
 #include <algorithm>
 // This is the main loop that all worker threads are born into.  They
 // wait for a signal on the work queue condition variable, then they

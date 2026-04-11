@@ -32,7 +32,7 @@ namespace ParticlePresets
 
     // Particles shoot upward through a wide cone and arc back down
     static constexpr ParticleSimulatorConfig Firework {
-        .EmissionRate = 100,
+        .EmissionRate = 250,
         .EmitterLifeTime = 5.f,
         .StartColor = glm::vec3(1.f, 0.3f, 0.3f),
         .EndColor = glm::vec3(1.f, 0.3f, 0.3f),
@@ -53,7 +53,7 @@ namespace ParticlePresets
 
     // Narrow upward stream that falls back like water
     static constexpr ParticleSimulatorConfig Fountain {
-        .EmissionRate = 250,
+        .EmissionRate = 350,
         .EmitterLifeTime = 5.f,
         .StartColor = glm::vec3(0.3f, 0.6f, 1.f),
         .EndColor = glm::vec3(0.3f, 0.6f, 1.f),

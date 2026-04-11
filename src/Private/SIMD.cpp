@@ -1,10 +1,6 @@
-﻿//
-// Created by YWvin on 2026/3/29.
-//
-
+﻿
 #include "SIMD.hpp"
 #if defined(__x86_64__) || defined(_M_X64)
-
 // For checking SIMD support on the CPU, MSVC uses intrin.h, while clang/gcc use cpuid.h.
 #ifdef _MSC_VER
 #include <intrin.h>

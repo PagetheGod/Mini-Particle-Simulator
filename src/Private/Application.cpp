@@ -1,7 +1,3 @@
-﻿//
-// Created by YWvin on 2026/3/23.
-//
-
 //External libs and STL
 #include <iostream>
 #include "SDL3/SDL_init.h"
@@ -12,7 +8,6 @@
 #include <format>
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_timer.h"
-#include <functional>
 //Own headers
 #include "Application.hpp"
 #include "HardwareRenderer.hpp"

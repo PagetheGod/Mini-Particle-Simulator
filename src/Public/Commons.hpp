@@ -1,7 +1,4 @@
 ﻿#pragma once
-
-#include <string>
-#include <cstdint>
 #include <random>
 
 // The PCG random lib I grabbed has virtually no MSVC support
