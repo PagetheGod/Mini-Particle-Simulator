@@ -280,20 +280,16 @@ if(BUILD_TESTING)
         tests/Camera2DTests.cpp
         tests/CommonsTests.cpp
         tests/ThreadPoolTests.cpp
+        tests/ParticleManagerTests.cpp
+        src/Private/ParticleManager.cpp
+        src/Private/VThreadPool.cpp
+        src/Private/SIMD.cpp
         src/Private/Camera2D.cpp
         src/Private/ThreadPool.cpp
     )
 
-    if(IS_X86_64)
-        target_sources(core_tests PRIVATE
-            tests/ParticleManagerTests.cpp
-            src/Private/ParticleManager.cpp
-            src/Private/VThreadPool.cpp
-            src/Private/SIMD.cpp
-        )
-        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-            set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
-        endif()
+    if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
     endif()
 
     target_include_directories(core_tests PRIVATE

@@ -1133,13 +1133,16 @@ void ParticleManager::SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t C
 AlignedArray ParticleManager::AllocateAlignedArray(size_t NumElements, size_t Alignment)
 {
     void* RawBlock = nullptr;
+    const size_t NumBytes = NumElements * sizeof(float);
 #ifdef _WIN32
     // Similar to the free situation
     // Windows uses this function to allocate aligned memory
-    RawBlock = _aligned_malloc(NumElements * sizeof(float), Alignment);
+    RawBlock = _aligned_malloc(NumBytes, Alignment);
 #else
-    // Window DOES NOT support this, POSIX does
-    RawBlock = std::aligned_alloc(Alignment, NumElements * sizeof(float));
+    // POSIX aligned_alloc requires the requested size to be a multiple of the alignment.
+    const size_t Remainder = NumBytes % Alignment;
+    const size_t RoundedBytes = Remainder == 0 ? NumBytes : (NumBytes + Alignment - Remainder);
+    RawBlock = std::aligned_alloc(Alignment, RoundedBytes);
 #endif
     if (!RawBlock)
     {
