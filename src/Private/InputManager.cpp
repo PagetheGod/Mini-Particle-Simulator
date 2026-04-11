@@ -1,5 +1,6 @@
 ﻿// External libs and STLs
 #include <iostream>
+#include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include <format>
 #include "SDL3/SDL_render.h"
@@ -50,15 +51,6 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 						Result.Event = InputEvent::ToggleViewport;
 						break;
 					}
-					/*
-					case SDLK_F11:
-					{
-						//Toggle fullscreen, SDL_GetWindowFlags() return a bunch of flags, bitwise and to get the fullscreen flag
-						const uint64_t Flags = SDL_GetWindowFlags(m_Window);
-						const bool IsFullScreen = Flags & SDL_WINDOW_FULLSCREEN;
-						SDL_SetWindowFullscreen(m_Window, !IsFullScreen);
-						break;
-					}*/
 					default:
 						break;
 				}
@@ -69,6 +61,13 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 			// button.x/y is the click position
 			case SDL_EVENT_MOUSE_BUTTON_DOWN:
 			{
+				// If ImGui wants the mouse (cursor is over a widget), don't
+				// let the click start a camera drag underneath it
+				if (ImGui::GetIO().WantCaptureMouse)
+				{
+					Result.Event = InputEvent::NoOp;
+					break;
+				}
 				if (Event.button.button == SDL_BUTTON_LEFT)
 				{
 					m_IsLMBPressed = true;
@@ -87,6 +86,12 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 			}
 			case SDL_EVENT_MOUSE_WHEEL:
 			{
+				// Don't let scroll over a slider/combo also zoom the camera
+				if (ImGui::GetIO().WantCaptureMouse)
+				{
+					Result.Event = InputEvent::NoOp;
+					break;
+				}
 				// Scroll wheel. event.wheel.y is the scroll amount.
 				// Positive = scroll up, negative = scroll down.
 				// Useful for zooming the camera.
@@ -105,6 +110,13 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 			// Mouse movement. Its event data stores both current pos and delta since LAST EVENT
 			case SDL_EVENT_MOUSE_MOTION:
 			{
+				// Drop motion events when ImGui owns the mouse so dragging a
+				// slider doesn't also pan the camera
+				if (ImGui::GetIO().WantCaptureMouse)
+				{
+					Result.Event = InputEvent::NoOp;
+					break;
+				}
 				if (m_IsLMBPressed)
 				{
 					if (!IsCursorInViewport(glm::vec2(Event.motion.x, Event.motion.y), IsPanelOpen))
