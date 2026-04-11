@@ -93,9 +93,16 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
 
     ImGui::StyleColorsDark();
 
+    // Bump padding, spacing, scrollbar width, etc. by the same 1.5x factor
+    // as the font so widgets don't look cramped around the bigger text.
+    // ImGui auto-sizes content rects to fit the font, but the gaps between
+    // widgets stay at defaults unless we scale them ourselves.
+    constexpr float UIScale = 1.5f;
+    ImGui::GetStyle().ScaleAllSizes(UIScale);
+
     // Load Roboto font at the correct size for the display's DPI scale.
-    // Base size is 24 (1.5x the original 16) for readability - the stock
-    // ImGui default ends up too small on modern high-res monitors.
+    // Base size is 24 (16 * UIScale) for readability - the stock ImGui
+    // default ends up too small on modern high-res monitors.
     //
     // On HiDPI (Retina) we rasterize at BaseFontSize * DpiScale = 48px so the
     // glyph texture has the extra detail, then set FontGlobalScale = 1/DpiScale
@@ -109,7 +116,7 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     // path would fail when the binary is invoked from the project root
     // (e.g., `make run`), leaving ImGui's atlas empty and making every
     // subsequent draw render against an invalid font texture.
-    constexpr float BaseFontSize = 24.f;
+    constexpr float BaseFontSize = 16.f * UIScale;
     const float DpiScale = SDL_GetWindowDisplayScale(m_Window);
     const char* BasePath = SDL_GetBasePath();
     const std::string FontPath = std::string(BasePath ? BasePath : "") + "Roboto-Medium.ttf";
