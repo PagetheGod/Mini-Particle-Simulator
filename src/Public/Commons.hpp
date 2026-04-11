@@ -48,7 +48,6 @@ namespace Commons
 
         /*
          * Timing constants
-         * ---------------------------------------------------------------------------
          * We cap delta time to prevent the "spiral of death" — if the app freezes
          * for 2 seconds (e.g., breakpoint in debugger, OS stall), the next frame
          * would get dt=2.0. Physics would explode because particles would try to

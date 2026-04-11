@@ -93,11 +93,7 @@ struct SIMDTraits<SIMDLevel::SSE2>
     {
         return _mm_setzero_ps();
     }
-    // Store 4 floats from an SSE 128-bit wide register into the memory location specified.
-    // Using the unaligned variant (storeu) for the same reason as loadu above: when threads
-    // chunk the particle arrays, chunk boundaries may not fall on 16-byte-aligned indices,
-    // so the destination pointer is not guaranteed to be aligned. On modern CPUs (Nehalem+)
-    // storeu matches store-speed when the address happens to be aligned.
+    // Store 4/8/16 floats, using the unaligned variant for the same reason above
     static void VectorizedStore(float* DstPtr, __m128 SrcVector)
     {
         _mm_storeu_ps(DstPtr, SrcVector);
@@ -144,6 +140,11 @@ struct SIMDTraits<SIMDLevel::SSE2>
     {
         return _mm_max_ps(Lhs, Rhs);
     }
+    // Per pair comparison, return the smaller of the pairs
+    static __m128 VectorizedMin(__m128 Lhs, __m128 Rhs)
+    {
+        return _mm_min_ps(Lhs, Rhs);
+    }
 };
 
 // Same stuffs, just for AVX2
@@ -156,7 +157,7 @@ struct SIMDTraits<SIMDLevel::AVX2>
     {
         return _mm256_loadu_ps(SrcPtr);
     }
-    // Store (unaligned — see SSE2 VectorizedStore for the rationale)
+    // Store
     static void VectorizedStore(float* DstPtr, __m256 SrcVector)
     {
         _mm256_storeu_ps(DstPtr, SrcVector);
@@ -207,6 +208,11 @@ struct SIMDTraits<SIMDLevel::AVX2>
     {
         return _mm256_max_ps(Lhs, Rhs);
     }
+    // Min
+    static __m256 VectorizedMin(__m256 Lhs, __m256 Rhs)
+    {
+        return _mm256_min_ps(Lhs, Rhs);
+    }
 };
 
 // AVX512 variants
@@ -220,13 +226,13 @@ struct SIMDTraits<SIMDLevel::AVX512>
     {
         return _mm512_loadu_ps(SrcPtr);
     }
-    // Store (unaligned — see SSE2 VectorizedStore for the rationale)
+    // Store
     static void VectorizedStore(float* DstPtr, __m512 SrcVector)
     {
         _mm512_storeu_ps(DstPtr, SrcVector);
     }
     // Broadcast
-    static __m512 VectorizedBroadcast(float& Val)
+    static __m512 VectorizedBroadcast(const float& Val)
     {
         return _mm512_set1_ps(Val);
     }
@@ -272,6 +278,11 @@ struct SIMDTraits<SIMDLevel::AVX512>
     static __m512 VectorizedMax(__m512 Lhs, __m512 Rhs)
     {
         return _mm512_max_ps(Lhs, Rhs);
+    }
+    // Min
+    static __m512 VectorizedMin(__m512 Lhs, __m512 Rhs)
+    {
+        return _mm512_min_ps(Lhs, Rhs);
     }
 };
 

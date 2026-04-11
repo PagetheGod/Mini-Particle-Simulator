@@ -65,6 +65,7 @@ struct ForceData
     {
         float VortexPull = 0.f;
         float WindPeriod;
+        float PointRadius;
     };
 
 };
@@ -254,7 +255,7 @@ private:
     float DeltaTime);
     void CheckParticleLifeTime();
     void CheckParticleY();
-    // Particle spawn functions for each shape — these only set position
+    // Particle spawn functions for each shape, these only set position
     void SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
         const float DeltaTime);
     void SpawnParticles_BoxPlane(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
@@ -271,7 +272,7 @@ private:
     float SpawnParticles_Size(const ParticleSimulatorConfig& Config);
     float SpawnParticles_LifeTime(const ParticleSimulatorConfig& Config);
 
-    // Force solvers - these will get dispatched by the UpdateParticle function
+    // Force solvers, these will get dispatched by the UpdateParticle function
     void SolveForces(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
         float DeltaTime, const glm::vec3* WindInfluences);
     void SolveGravity(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime);
@@ -287,7 +288,7 @@ private:
         const float DeltaTime, const glm::vec3& VortexCenter);
 
     void SolvePointForce(uint32_t StartParticleIndex, uint32_t Count,
-        const glm::vec3& ForcePosition, const float Strength,const float DeltaTime);
+        const glm::vec3& ForcePosition, const float Strength, const float Radius, const float DeltaTime);
 
 
     // These are some SIMD implementations for particle update functions I wrote at the start
@@ -304,7 +305,7 @@ private:
 
     template<SIMDLevel Level>
     void SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
-        const float Strength, const float DeltaTime);
+        const float Strength, const float Radius, const float DeltaTime);
 
     template<SIMDLevel Level>
     void SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,

@@ -332,7 +332,7 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
             // Clamp
             if (Config.Speed.x >= Config.Speed.y)
             {
-                Config.Speed.x = std::min(0.f, Config.Speed.y - 0.1f);
+                Config.Speed.x = std::max(0.f, Config.Speed.y - 0.1f);
             }
         }
         else
@@ -376,9 +376,9 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // Min and max scales of the particles
             IsConfigDirty |= ImGui::SliderFloat("Size Min", &Config.Scale.x,
-                0.1f, 3.f, "%.1f");
+                0.1f, 2.f, "%.1f");
             IsConfigDirty |= ImGui::SliderFloat("Size Max", &Config.Scale.y,
-                0.1f, 3.f, "%.1f");
+                0.1f, 2.f, "%.1f");
             if (Config.Scale.x >= Config.Scale.y)
             {
                 Config.Scale.x = std::max(0.1f, Config.Scale.y - 0.1f);
@@ -452,7 +452,28 @@ bool UIManager::DrawParticleVisuals(ParticleSimulatorConfig &Config)
             IsConfigDirty = true;
         }
         /*
-         * Show a preview of start-to-end color transition
+         * Show a preview of start-to-end color transition using ImGui's low-level draw list API.
+         *
+         * ImGui has two rendering paths: the widget API (SliderFloat, Checkbox, etc.) which handles
+         * layout and interaction automatically, and the draw list API which lets us draw arbitrary
+         * shapes directly. The draw list is what ImGui itself uses internally to render widgets.
+         *
+         * AddRectFilledMultiColor() draws a filled rectangle with independently colored corners
+         * The GPU interpolates between the four corner colors across the rect. By setting top-left
+         * and bottom-left to StartColor, and top-right and bottom-right to EndColor,
+         * we get a horizontal gradient from start to end color.
+         *
+         * The corner colors must be packed as ImU32 (ABGR uint32), not float4. ImGui provides
+         * ColorConvertFloat4ToU32() for this conversion.
+         *
+         * GetCursorScreenPos() returns the current layout cursor in absolute screen coordinates
+         * (not window-relative). This is where the next widget would be placed. We use it as the
+         * top-left corner of our gradient rect, and offset by BarSize for the bottom-right.
+         *
+         * Because AddRectFilledMultiColor draws directly to the draw list and bypasses ImGui's
+         * layout system, ImGui doesn't know we drew anything, the cursor doesn't advance, and
+         * subsequent widgets would overlap our gradient. Dummy(BarSize) fixes this by reserving
+         * the equivalent space in the layout without drawing anything visible.
          */
         const ImVec2 BarSize(ImGui::GetContentRegionAvail().x, 20.f);
         const ImVec2 CursorPos = ImGui::GetCursorScreenPos();
@@ -534,6 +555,7 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                         {
                             NewForceDataRef.Strength = 10.f;
                             NewForceDataRef.Direction = {0.f, 1.f, 0.f};
+                            NewForceDataRef.PointRadius = 50.f;
                             break;
                         }
 
@@ -596,7 +618,7 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
             }
             if (IsHeadOpen)
             {
-                //Force type-specific params
+                // Force type-specific params
                 switch (ForceConfig.ForceTypes[i])
                 {
                     case ForceType::Drag:
@@ -609,10 +631,12 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                     {
                         IsConfigDirty |= ImGui::SliderFloat("Point Force Strength", &ForceDataRef.Strength,
                             -75.f, 75.f, "%.1f");
+                        IsConfigDirty |= ImGui::SliderFloat("Influence Radius", &ForceDataRef.PointRadius,
+                            1.f, 350.f, "%.0f");
                         ImGui::Text("Positive Strength = attraction, Negative Strength = repulsion");
-                        IsConfigDirty |= ImGui::DragFloat("Position X", &ForceDataRef.Direction.x, 0.1f, -20.f, 20.f);
-                        IsConfigDirty |= ImGui::DragFloat("Position Y", &ForceDataRef.Direction.y, 0.1f, -20.f, 20.f);
-                        IsConfigDirty |= ImGui::DragFloat("Position Z", &ForceDataRef.Direction.z, 0.1f, 0.f, 20.f);
+                        IsConfigDirty |= ImGui::SliderFloat("Position X", &ForceDataRef.Direction.x,-50.f, 50.f, "%.1f");
+                        IsConfigDirty |= ImGui::SliderFloat("Position Y", &ForceDataRef.Direction.y, -50.f, 50.f, "%.1f");
+                        IsConfigDirty |= ImGui::SliderFloat("Position Z", &ForceDataRef.Direction.z, 0.f, 20.f, "%.1f");
                         break;
                     }
                     case ForceType::Vortex:
@@ -621,9 +645,6 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                             0.f, 50.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Vortex Radial Strength", &ForceDataRef.VortexPull,
                             0.f, 50.f, "%.1f");
-                        // For now, we limit the vortex to always be at y = 0
-                        IsConfigDirty |= ImGui::DragFloat("Vertex Center X", &ForceDataRef.Direction.x, 0.1f, -5.f, 5.f);
-                        IsConfigDirty |= ImGui::DragFloat("Vertex Center Z", &ForceDataRef.Direction.z, 0.1f, 0.f, 5.f);
                         break;
                     }
                     case ForceType::Directional:

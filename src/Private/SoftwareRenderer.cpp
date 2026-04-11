@@ -24,6 +24,7 @@ m_ParticleTexture(nullptr), m_ParticleManager(InParticleManagerPtr), m_Camera(nu
 
 SoftwareRenderer::~SoftwareRenderer()
 {
+    // Clean up
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
@@ -42,7 +43,7 @@ SoftwareRenderer::~SoftwareRenderer()
 
 bool SoftwareRenderer::Initialize(SDL_Window* Window)
 {
-    /* Create the SDL_Renderer ──
+    /* Create the SDL_Renderer
      * SDL_CreateRenderer picks the best available backend automatically:
      * On Windows is DX11/12
      * On MacOS is Metal
@@ -73,7 +74,7 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     // This produces sharp text at any scaling, unlike FontGlobalScale which
     // just magnifies the default 13px bitmap font.
     const float DpiScale = SDL_GetWindowDisplayScale(m_Window);
-    ImGuiIO.Fonts->AddFontFromFileTTF("Roboto-Medium.ttf", 16.0f * DpiScale);
+    ImGuiIO.Fonts->AddFontFromFileTTF("Roboto-Medium.ttf", 16.f * DpiScale);
 
     // Initialize backends
     // The SDL3 platform backend handles input (mouse, keyboard, clipboard).
@@ -120,10 +121,10 @@ void SoftwareRenderer::EndFrame(const bool IsPanelOpen)
     SDL_SetRenderDrawColorFloat(m_Renderer, 0.06f, 0.06f, 0.08f, 1.0f);
     SDL_RenderClear(m_Renderer);
 
-    // SPLIT-REGION: Clip particle drawing to the viewport
-    // SDL_SetRenderClipRect restricts ALL subsequent draw calls to
+    // Clip particle drawing to the viewport
+    // SDL_SetRenderClipRect restricts all subsequent draw calls to
     // the given rectangle. This is the software equivalent of Vulkan's
-    // VkScissor — particles physically cannot render outside this rect.
+    // VkScissor(I am not doing that) — particles physically cannot render outside this rect.
     const Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
     const float ScaleX = Layout::RENDER_WIDTH / VpRect.Width;
     const float ScaleY = Layout::RENDER_HEIGHT / VpRect.Height;

@@ -350,7 +350,7 @@ void ParticleManager::SolveVortex(uint32_t StartParticleIndex, uint32_t Count, c
         float RadialZ = m_ParticleStates.Pz[i] - VortexCenter.z;
         // Calculate the inverse distance, for normalization
         const float DistanceSquare = RadialX * RadialX + RadialZ * RadialZ;
-        const float Distance = std::max(glm::sqrt(DistanceSquare), glm::epsilon<float>());
+        const float Distance = std::max(glm::sqrt(DistanceSquare), Constants::CUSTOM_EPSILON);
         const float InverseDistance = 1.f / Distance;
         // Get the tangential components, normalize everything
         float TangentX = RadialZ;
@@ -366,23 +366,21 @@ void ParticleManager::SolveVortex(uint32_t StartParticleIndex, uint32_t Count, c
 }
 
 void ParticleManager::SolvePointForce(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
-    const float Strength, const float DeltaTime)
+    const float Strength, const float Radius, const float DeltaTime)
 {
     /*
-     * Calculate the point attractor/repulsor force
-     * This is a relatively tricky one. Steps:
-     * 1. Calculate the vector between the point and the particle, take its length sqaure
-     * 2. Factor in the inverse square falloff
-     * 3. Calculate the final influence: force * dt
-     * 4. This might not get vectorized by the compilers, need to check disassembly
-     * Maybe there is some compiler flags we can use to check for that?
+     * Calculate the point attractor/repulsor force using smoothstep falloff.
+     * Steps:
+     * 1. Calculate the vector from the particle to the force position, get its length
+     * 2. Compute smoothstep(Radius, 0, dist), full strength at center, zero at Radius
+     * 3. Normalize the direction, apply force * smoothstep * dt to velocity
+     * Using smoothstep because the inverse square fall off is really EXTREME
      */
 
     /*
-     * To parallelize a block of logics, the compiler needs make sure we have no pointer aliasing
-     * i.e. different pointer variables pointing to the same memory, leading to data race and corruptions
-     * the __restrict__ qualifier tells the compiler that two pointers are not pointing to
-     * overlapping region in memory
+     * The __restrict__ qualifiers SHOULD inform the compilers that the pointers do not overlap
+     * However godbolt showed that even with the qualifiers
+     * Clang seems to still run extra checks at run time, stange
      */
     float* restrict PosX = m_ParticleStates.Px.get() + StartParticleIndex;
     float* restrict PosY = m_ParticleStates.Py.get() + StartParticleIndex;
@@ -395,28 +393,39 @@ void ParticleManager::SolvePointForce(uint32_t StartParticleIndex, uint32_t Coun
     const float DtStrength = Strength * DeltaTime;
     for (uint32_t i = 0; i < Count; i++)
     {
-        // Get the three different components
-        float PointParticleX = PosX[i] - ForcePosition.x;
-        float PointParticleY = PosY[i] - ForcePosition.y;
-        float PointParticleZ = PosZ[i] - ForcePosition.z;
-        // Calculate distance square
-        float DistanceSquare = PointParticleX * PointParticleX + PointParticleY * PointParticleY +
-            PointParticleZ * PointParticleZ;
-        // Get the inverse of distance, use an epsilon to avoid 0-related explosions
-        DistanceSquare = std::max(DistanceSquare, glm::epsilon<float>());
-        const float InverseDistanceSquare = 1.f / DistanceSquare;
-        const float InverseDistance = glm::sqrt(InverseDistanceSquare);
-        // Normalize
-        PointParticleX *= InverseDistance;
-        PointParticleY *= InverseDistance;
-        PointParticleZ *= InverseDistance;
-        // Get the final influence by multiplying the force with fall off and dt
-        const float PointInfluence = InverseDistanceSquare * DtStrength;
-        // Add to the velocity components
-        VelX[i] -= PointInfluence * PointParticleX;
-        VelY[i] -= PointInfluence * PointParticleY;
-        VelZ[i] -= PointInfluence * PointParticleZ;
+        // Delta from particle to force position
+        float DeltaX = ForcePosition.x - PosX[i];
+        float DeltaY = ForcePosition.y - PosY[i];
+        float DeltaZ = ForcePosition.z - PosZ[i];
 
+        float DistSquare = DeltaX * DeltaX + DeltaY * DeltaY + DeltaZ * DeltaZ;
+        float Dist = std::sqrt(DistSquare);
+
+        // Skip particles outside the influence radius
+        if (Dist >= Radius)
+        {
+            continue;
+        }
+
+        // Normalize direction (avoid div by zero)
+        if (Dist < Constants::CUSTOM_EPSILON)
+        {
+            continue;
+        }
+        float InvDist = 1.f / Dist;
+        DeltaX *= InvDist;
+        DeltaY *= InvDist;
+        DeltaZ *= InvDist;
+
+        // smoothstep(Radius, 0, Dist) = smoothstep at edges [0, Radius], full at center
+        // t = clamp((Radius - Dist) / Radius, 0, 1) = 1 - Dist/Radius (already clamped by the early-out)
+        float T = 1.f - Dist / Radius;
+        float Falloff = T * T * (3.f - 2.f * T);
+
+        float PointInfluence = DtStrength * Falloff;
+        VelX[i] += PointInfluence * DeltaX;
+        VelY[i] += PointInfluence * DeltaY;
+        VelZ[i] += PointInfluence * DeltaZ;
     }
 }
 
@@ -713,7 +722,7 @@ glm::vec3 ParticleManager::SpawnParticles_Speed(float X, float Y, float Z, const
     float Speed = 0.f;
     if (Config.IsRandomSpeed)
     {
-        Speed = Commons::Utility::RandomFloat(Config.Speed.x, Config.Speed.y);
+        Speed = Utility::RandomFloat(Config.Speed.x, Config.Speed.y);
     }
     else
     {
@@ -728,8 +737,8 @@ glm::vec3 ParticleManager::SpawnParticles_Color(const ParticleSimulatorConfig& C
 {
     if (Config.IsRandomColor)
     {
-        return {Commons::Utility::RandomFloat_01(),Commons::Utility::RandomFloat_01(),
-            Commons::Utility::RandomFloat_01()};
+        return {Utility::RandomFloat_01(),Utility::RandomFloat_01(),
+            Utility::RandomFloat_01()};
     }
     return Config.StartColor;
 }
@@ -738,7 +747,7 @@ float ParticleManager::SpawnParticles_Size(const ParticleSimulatorConfig& Config
 {
     if (Config.IsRandomScale)
     {
-        return Commons::Utility::RandomFloat(Config.Scale.x, Config.Scale.y);
+        return Utility::RandomFloat(Config.Scale.x, Config.Scale.y);
     }
     return Config.Scale.x;
 }
@@ -747,7 +756,7 @@ float ParticleManager::SpawnParticles_LifeTime(const ParticleSimulatorConfig& Co
 {
     if (Config.IsRandomLifeTime)
     {
-        return Commons::Utility::RandomFloat(Config.LifeTime.x, Config.LifeTime.y);
+        return Utility::RandomFloat(Config.LifeTime.x, Config.LifeTime.y);
     }
     return Config.LifeTime.x;
 }
@@ -782,20 +791,30 @@ void ParticleManager::SolveForces(uint32_t StartParticleIndex, uint32_t Count, c
             }
             case ForceType::Point:
             {
-                // SIMD version on x86, scalar fallback on ARM
+                /*
+                 * Hardcoded to generate only SSE2 SIMD codes
+                 * The reason is that AVX2 and 512 requires the -mavx and -mavx512 flgas
+                 * These flags will allow the compilers to generate avx and avx512 instructions
+                 * And the flags do not have any compile/link time check to verify hardware supports
+                 * Which means if we compile the codes with these flags and run the app on an old CPU
+                 * The program will crash because it does not support the instructions
+                 * SSE2 on the other hand has much wider support, so we can use it
+                 * Like I don't think any one is gonna run this on a 32-bit CPU
+                 */
             #if defined(__x86_64__) || defined(_M_X64)
                 SolvePointForce_Vector<SIMDLevel::SSE2>(StartParticleIndex, Count,
                     ForceConfigData.ForceDataArray[i].Direction,
-                    ForceConfigData.ForceDataArray[i].Strength, DeltaTime);
+                    ForceConfigData.ForceDataArray[i].Strength,
+                    ForceConfigData.ForceDataArray[i].PointRadius, DeltaTime);
             #else
                 SolvePointForce(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Direction,
-                    ForceConfigData.ForceDataArray[i].Strength, DeltaTime);
+                    ForceConfigData.ForceDataArray[i].Strength,
+                    ForceConfigData.ForceDataArray[i].PointRadius, DeltaTime);
             #endif
                 break;
             }
             case ForceType::Vortex:
             {
-                // SIMD version on x86, scalar fallback on ARM (templates guarded)
             #if defined(__x86_64__) || defined(_M_X64)
                 SolveVortex_Vector<SIMDLevel::SSE2>(StartParticleIndex, Count,
                     ForceConfigData.ForceDataArray[i].Strength,
@@ -918,55 +937,68 @@ void ParticleManager::SolveGravity(float *StartParticlePtr, uint32_t Count, floa
 
 template <SIMDLevel Level>
 void ParticleManager::SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count,
-    const glm::vec3& ForcePosition, const float Strength, const float DeltaTime)
+    const glm::vec3& ForcePosition, const float Strength, const float Radius, const float DeltaTime)
 {
     using SIMDStruct = SIMDTraits<Level>;
     constexpr uint32_t SIMDWidth = SIMDStruct::SIMDWidth;
     const float DtStrength = Strength * DeltaTime;
-    // Broadcast the attractor/repulsor position components to three lanes
+
+    // Broadcast loop-invariant values
     auto PointPositionX = SIMDStruct::VectorizedBroadcast(ForcePosition.x);
     auto PointPositionY = SIMDStruct::VectorizedBroadcast(ForcePosition.y);
     auto PointPositionZ = SIMDStruct::VectorizedBroadcast(ForcePosition.z);
-    // Broadcast strength
     auto StrengthVec = SIMDStruct::VectorizedBroadcast(DtStrength);
-
-
-    // Broadcast a small epsilon to prevent div by 0 explosions
-    // Using our own epsilon here since the glm one is a bit too small
-    auto Epsilon = SIMDStruct::VectorizedBroadcast(0.00001f);
+    const float InvRadius = 1.f / Radius;
+    auto InvRadiusVec = SIMDStruct::VectorizedBroadcast(InvRadius);
+    auto Epsilon = SIMDStruct::VectorizedBroadcast(Constants::CUSTOM_EPSILON);
+    auto One = SIMDStruct::VectorizedBroadcast(1.f);
+    auto Three = SIMDStruct::VectorizedBroadcast(3.f);
+    auto Two = SIMDStruct::VectorizedBroadcast(2.f);
+    auto Zero = SIMDStruct::VectorizedZero();
 
     uint32_t i = StartParticleIndex;
     for (; i + SIMDWidth <= StartParticleIndex + Count; i += SIMDWidth)
     {
-        // Pre component vectorized subtractions
+        // Delta from particle to force position
         auto DeltaX = SIMDStruct::VectorizedSub(PointPositionX, SIMDStruct::VectorizedLoad(&m_ParticleStates.Px[i]));
         auto DeltaY = SIMDStruct::VectorizedSub(PointPositionY, SIMDStruct::VectorizedLoad(&m_ParticleStates.Py[i]));
         auto DeltaZ = SIMDStruct::VectorizedSub(PointPositionZ, SIMDStruct::VectorizedLoad(&m_ParticleStates.Pz[i]));
-        // Next step, calculate the distance square
-        // We do some ugly chaining here because we don't use the + operators
-        auto XYSquareSum = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedMul(DeltaX, DeltaX),
-            SIMDStruct::VectorizedMul(DeltaY, DeltaY));
-        auto DistSquare = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedMul(DeltaZ, DeltaZ), XYSquareSum);
-        // Clamp DistSquare to epsilon BEFORE computing the inverse. Without this, a
-        // particle sitting exactly on the attractor would give rsqrt(0) = +inf, which
-        // then propagates NaN through the normalization and poisons the velocity
-        // permanently. Since NaN propagates through every subsequent op, one unlucky
-        // particle would stay dead forever.
-        DistSquare = SIMDStruct::VectorizedMax(DistSquare, Epsilon);
-        auto InverseDistance = SIMDStruct::VectorizedRSqrt(DistSquare);
-        // Use the inverse distance calculated above
-        auto InverseDistSquare= SIMDStruct::VectorizedMul(InverseDistance, InverseDistance);
-        // Normalize all delta components
-        DeltaX = SIMDStruct::VectorizedMul(DeltaX, InverseDistance);
-        DeltaY = SIMDStruct::VectorizedMul(DeltaY, InverseDistance);
-        DeltaZ = SIMDStruct::VectorizedMul(DeltaZ, InverseDistance);
-        // Calculate strength times delta time times inverse dist square
-        auto ForceInfluence = SIMDStruct::VectorizedMul(StrengthVec, InverseDistSquare);
-        // Granular operations to do +=, first load the original values, then add
+
+        // Distance squared
+        auto DistSquare = SIMDStruct::VectorizedAdd(
+            SIMDStruct::VectorizedAdd(
+                SIMDStruct::VectorizedMul(DeltaX, DeltaX),
+                SIMDStruct::VectorizedMul(DeltaY, DeltaY)),
+            SIMDStruct::VectorizedMul(DeltaZ, DeltaZ));
+
+        // Clamp to epsilon before rsqrt to prevent div by 0
+        auto ClampedDistSquare = SIMDStruct::VectorizedMax(DistSquare, Epsilon);
+        auto InvDist = SIMDStruct::VectorizedRSqrt(ClampedDistSquare);
+        // Dist = 1 / InvDist, but we can also get it from DistSquare * InvDist (= sqrt(DistSquare))
+        auto Dist = SIMDStruct::VectorizedMul(ClampedDistSquare, InvDist);
+
+        // Normalize direction
+        DeltaX = SIMDStruct::VectorizedMul(DeltaX, InvDist);
+        DeltaY = SIMDStruct::VectorizedMul(DeltaY, InvDist);
+        DeltaZ = SIMDStruct::VectorizedMul(DeltaZ, InvDist);
+
+        // Smoothstep falloff: T = clamp(1 - Dist/Radius, 0, 1), Falloff = T*T*(3 - 2*T)
+        // Particles outside the radius get T=0 → Falloff=0 → no force applied
+        auto T = SIMDStruct::VectorizedSub(One, SIMDStruct::VectorizedMul(Dist, InvRadiusVec));
+        T = SIMDStruct::VectorizedMax(T, Zero);
+        T = SIMDStruct::VectorizedMin(T, One);
+        auto Falloff = SIMDStruct::VectorizedMul(
+            SIMDStruct::VectorizedMul(T, T),
+            SIMDStruct::VectorizedSub(Three, SIMDStruct::VectorizedMul(Two, T)));
+
+        // Force magnitude = Strength * dt * smoothstep
+        auto ForceInfluence = SIMDStruct::VectorizedMul(StrengthVec, Falloff);
+
+        // Load velocities, apply force along normalized direction, store back
         auto AdjustedVx = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vx[i]);
         auto AdjustedVy = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vy[i]);
         auto AdjustedVz = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vz[i]);
-        // Then scale all the normalized delta components and add, then store
+
         AdjustedVx = SIMDStruct::VectorizedAdd(AdjustedVx, SIMDStruct::VectorizedMul(DeltaX, ForceInfluence));
         AdjustedVy = SIMDStruct::VectorizedAdd(AdjustedVy, SIMDStruct::VectorizedMul(DeltaY, ForceInfluence));
         AdjustedVz = SIMDStruct::VectorizedAdd(AdjustedVz, SIMDStruct::VectorizedMul(DeltaZ, ForceInfluence));
@@ -975,28 +1007,30 @@ void ParticleManager::SolvePointForce_Vector(uint32_t StartParticleIndex, uint32
         SIMDStruct::VectorizedStore(&m_ParticleStates.Vy[i], AdjustedVy);
         SIMDStruct::VectorizedStore(&m_ParticleStates.Vz[i], AdjustedVz);
     }
-    // Scalar clean up — matches the SIMD body's sign convention (Force - Particle, +=)
-    // and its epsilon (0.00001f), so cross-validation between the two code paths can
-    // be bit-exact up to the rsqrt approximation error.
+    // Scalar cleanup for remaining particles
     for (; i < StartParticleIndex + Count; i++)
     {
-        // Delta = ForcePosition - ParticlePosition (points FROM particle TO attractor)
         float DeltaX = ForcePosition.x - m_ParticleStates.Px[i];
         float DeltaY = ForcePosition.y - m_ParticleStates.Py[i];
         float DeltaZ = ForcePosition.z - m_ParticleStates.Pz[i];
-        // Calculate distance square, clamped to the same epsilon as the SIMD path
-        float DistanceSquare = DeltaX * DeltaX + DeltaY * DeltaY + DeltaZ * DeltaZ;
-        DistanceSquare = std::max(DistanceSquare, Constants::CUSTOM_EPSILON);
-        const float InverseDistanceSquare = 1.f / DistanceSquare;
-        const float InverseDistance = std::sqrt(InverseDistanceSquare);
-        // Normalize the delta by multiplying by 1/r
-        DeltaX *= InverseDistance;
-        DeltaY *= InverseDistance;
-        DeltaZ *= InverseDistance;
-        // Proper inverse-square force magnitude: Strength * dt / r^2
-        const float PointInfluence = InverseDistanceSquare * DtStrength;
-        // Velocity += ForceMag * NormalizedDelta. Delta points toward attractor, so
-        // += pulls the particle inward (attraction).
+
+        float DistSquare = DeltaX * DeltaX + DeltaY * DeltaY + DeltaZ * DeltaZ;
+        float Dist = std::sqrt(DistSquare);
+
+        if (Dist >= Radius || Dist < Constants::CUSTOM_EPSILON)
+        {
+            continue;
+        }
+
+        float InverseDist = 1.f / Dist;
+        DeltaX *= InverseDist;
+        DeltaY *= InverseDist;
+        DeltaZ *= InverseDist;
+
+        float T = 1.f - Dist / Radius;
+        float Falloff = T * T * (3.f - 2.f * T);
+        float PointInfluence = DtStrength * Falloff;
+
         m_ParticleStates.Vx[i] += PointInfluence * DeltaX;
         m_ParticleStates.Vy[i] += PointInfluence * DeltaY;
         m_ParticleStates.Vz[i] += PointInfluence * DeltaZ;

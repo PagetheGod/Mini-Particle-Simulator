@@ -25,7 +25,7 @@ class ThreadPool {
   // Arguments:
   //
   //  - num_threads:  the number of threads in the pool.
-  explicit ThreadPool(size_t num_threads = 4, bool IsUsingCustomThreadCount = false);
+  explicit ThreadPool(size_t num_threads = 4);
 
   // destructs the threadpool
   // makes sure any threads are joined in
