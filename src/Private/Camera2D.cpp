@@ -27,7 +27,7 @@ glm::vec2 Camera2D::ScreenToWorld(float ScreenX, float ScreenY, const Layout::Vi
 void Camera2D::Pan(float ScreenDX, float ScreenDY)
 {
     m_CameraPosX -= ScreenDX / m_Zoom;
-    m_CameraPosX = std::clamp(m_CameraPosX, LEFTMOST_PAN, m_RightmostPan);
+    m_CameraPosX = std::clamp(m_CameraPosX, m_LeftmostPan, m_RightmostPan);
     m_CameraPosY -= ScreenDY / m_Zoom;
     m_CameraPosY = std::clamp(m_CameraPosY, -Layout::VIEWPORT_HEIGHT_OPEN, Layout::VIEWPORT_HEIGHT_OPEN);
 }
@@ -55,4 +55,14 @@ void Camera2D::Reset()
     m_CameraPosX = 0.f;
     m_CameraPosY = 0.f;
     m_Zoom = 1.f;
+}
+
+void Camera2D::OnViewportResized(const Layout::ViewportRect& InViewportRect)
+{
+    // Pan bounds are symmetric around the world origin, sized to the new viewport width.
+    // Without this, collapsing the panel widens the viewport but the camera stays clamped
+    // to the old narrower range, so the user can't pan into the newly-revealed area.
+    m_RightmostPan = InViewportRect.Width;
+    m_LeftmostPan = -InViewportRect.Width;
+    m_CameraPosX = std::clamp(m_CameraPosX, m_LeftmostPan, m_RightmostPan);
 }

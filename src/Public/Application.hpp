@@ -23,20 +23,6 @@ enum class RendererType : uint8_t
     Hardware
 };
 
-/*
- * Enum to help us transition between different states in the application
- * Emitting: the emitter is still spawning particles, this is only really relevant to a continuous emitter
- * Fading: the emitter had stopped spawning particles, but there are still live particles to render
- * Stopped: either particles had all died out, or the user paused the playback
- */
-enum class PlaybackState : uint8_t
-{
-    Emitting,
-    Fading,
-    Stopped
-};
-
-
 
 class Application {
 public:
@@ -78,13 +64,9 @@ private:
     std::unique_ptr<ParticleManager> m_ParticleManager;
     InputManager m_InputManager;
     Camera2D* m_Camera2D; // Raw ptr because we do not own it
-    //States
-    bool m_Running = false;
+    // States
     bool m_Paused = true;
-    bool m_IsLMBPressed = false;
-    bool m_IsPanelOpen = true;
     bool m_ShouldLoop = true;
-    PlaybackState m_PlaybackState = PlaybackState::Stopped;
     float m_PlaybackLeft = 0.f;
     bool m_IsConfigDirty = false;
     // This commit persists through the entire lifetime of the app

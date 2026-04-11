@@ -16,7 +16,8 @@ m_JobQueue(), m_KillThreads(false)
     // to pass thread_loop to a thread you need to specify the function as ThreadPool::thread_loop
     // and pass the first argument as `this`
     const size_t hw_threads = std::thread::hardware_concurrency() == 0 ? 4 : std::thread::hardware_concurrency();
-    // Clamp to [1, hardware_concurrency - 1] to leave 1 thread for the main thread
+    // Clamp to [1, hardware_concurrency - 1] to leave 1 thread for the main thread, Travis mentioned this
+    // For last assignment
     const size_t max_threads = std::max(static_cast<size_t>(1), hw_threads - 1);
     num_threads = std::clamp(num_threads, static_cast<size_t>(1), max_threads);
     for (size_t i = 0; i < num_threads; i++)

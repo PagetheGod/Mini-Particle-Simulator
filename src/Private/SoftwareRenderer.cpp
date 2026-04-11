@@ -7,6 +7,8 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include <iostream>
+#include <string>
+#include "SDL3/SDL_filesystem.h"
 #include "SDL3/SDL_render.h"
 #include "glm/exponential.hpp"
 //Own headers
@@ -61,6 +63,27 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
         std::cerr << "Failed to create SDL_Renderer: " << SDL_GetError() << std::endl;
         return false;
     }
+    SDL_SetRenderVSync(m_Renderer, 1);
+
+    /*
+     * Added this to resolve weird size issues with Retina display
+     * From what I understand, basically this is a DPI-aware issues
+     * Most of the time when we work with drawing things to a screen, we deal with
+     * logical pixels(or points), the OS then scale them behind the scene to map
+     * them to real pixels, this abstracts things away and make our life easier
+     * However, in our case, we asked for High pixel density in app init because our fonts
+     * needed to look sharp and elligible, this means we have to work with real pixels now
+     * And on mac, the 1920 x 1080 window has way more pixels because it's Retina
+     * So we are drawing 1920 x 1080 pixels to a window that needs a much larger frame buffer
+     *
+     * This call basically resets us to drawing to logical points, then SDL will just expand
+     * our buffer to fit the drawable area
+     * Letterbox just tells SDL to not stretch things when user resizes
+     */
+    SDL_SetRenderLogicalPresentation(m_Renderer,
+        Commons::Layout::WINDOW_WIDTH, Commons::Layout::WINDOW_HEIGHT,
+        SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
     // Initialize ImGui. We are not setting the IniFileName to nullptr because in this case
     // we do want to save the layout state since this is a persistent ui
     IMGUI_CHECKVERSION();
@@ -74,7 +97,15 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     // This produces sharp text at any scaling, unlike FontGlobalScale which
     // just magnifies the default 13px bitmap font.
     const float DpiScale = SDL_GetWindowDisplayScale(m_Window);
-    ImGuiIO.Fonts->AddFontFromFileTTF("Roboto-Medium.ttf", 16.f * DpiScale);
+    const char* BasePath = SDL_GetBasePath();
+    const std::string FontPath = std::string(BasePath ? BasePath : "") + "Roboto-Medium.ttf";
+    ImFont* LoadedFont = ImGuiIO.Fonts->AddFontFromFileTTF(FontPath.c_str(), 16.f * DpiScale);
+    if (LoadedFont == nullptr)
+    {
+        std::cerr << "Failed to load font from '" << FontPath
+                  << "'. Falling back to ImGui default font." << std::endl;
+        ImGuiIO.Fonts->AddFontDefault();
+    }
 
     // Initialize backends
     // The SDL3 platform backend handles input (mouse, keyboard, clipboard).

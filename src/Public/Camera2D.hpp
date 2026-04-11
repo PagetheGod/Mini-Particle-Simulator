@@ -34,6 +34,10 @@ public:
     // Reset to default view (centered, no zoom)
     void Reset();
 
+    // Recompute pan bounds when the viewport size changes (e.g., panel toggle).
+    // Re-clamps the current camera position so it stays inside the new bounds.
+    void OnViewportResized(const Commons::Layout::ViewportRect& InViewportRect);
+
     // Getters
     [[nodiscard]] float GetZoom() const { return m_Zoom; }
     [[nodiscard]] float GetCameraPosX() const { return m_CameraPosX; }
@@ -47,10 +51,12 @@ private:
     float m_CameraPosY = 0.f;
     // Zoom level. 1.0 = no zoom. 2.0 = 2x magnification. 0.5 = zoomed out.
     float m_Zoom = 2.f;
+    // Pan bounds in world space. Symmetric around 0, sized to the current viewport width.
+    // These get updated whenever the panel toggles via OnViewportResized().
+    float m_LeftmostPan = -Commons::Layout::VIEWPORT_WIDTH_OPEN;
     float m_RightmostPan = Commons::Layout::VIEWPORT_WIDTH_OPEN;
 
     // Constants
     static constexpr float MIN_ZOOM = 1.f;
     static constexpr float MAX_ZOOM = 5.f;
-    static constexpr float LEFTMOST_PAN = -Commons::Layout::VIEWPORT_WIDTH_OPEN;
 };

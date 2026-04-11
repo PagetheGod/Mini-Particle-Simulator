@@ -93,8 +93,7 @@ bool Application::Initialize() {
 	m_Camera2D = m_SoftwareRenderer->GetCamera();
 	// Do the initialization of particle manager last because it requires lots of allocations
 	m_ParticleManager->InitializeParticles();
-
-
+	// Set play back left to max
 	m_PlaybackLeft = PLAYBACK_DURATION;
     return true;
 }
@@ -120,6 +119,9 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	if (Input.Event == InputEvent::ToggleViewport)
 	{
 		m_UIManager->TogglePanelOpen();
+		// Viewport size just changed, refresh the camera's pan bounds so we can
+		// reach the newly-revealed area (or get clamped back into the new bounds)
+		m_Camera2D->OnViewportResized(Layout::GetViewportRect(m_UIManager->IsPanelOpen()));
 	}
 	if (Input.Event == InputEvent::CameraPan)
 	{
@@ -156,10 +158,6 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 			// Pass dirty=true so ParticleFrame resets emitter lifetime and particle count
 			m_PlaybackLeft = PLAYBACK_DURATION - InDeltaTimeData.DeltaTime;
 			m_ParticleManager->ParticleFrame(InDeltaTimeData.DeltaTime, m_ParticleConfig, true);
-		}
-		else
-		{
-			m_PlaybackState = PlaybackState::Stopped;
 		}
 	}
 
@@ -317,15 +315,15 @@ float Application::GetDeltaTime(uint64_t& LastNs)
 {
 	float DeltaTime = 0.f;
 
-	//Calculate delta time
+	// Calculate delta time
 	const uint64_t CurrentNs = SDL_GetTicksNS();
 	const uint64_t ElapsedNs = CurrentNs - LastNs;
 	LastNs = CurrentNs;
 
-	//As suggested by the names, times were in nano seconds, gotta convert to seconds
+	// As suggested by the names, times were in nano seconds, gotta convert to seconds
 	DeltaTime = static_cast<float>(ElapsedNs) / Commons::Constants::NS_PER_SECOND;
 
-	//Cap it as we said before so things don't explode when we hanged/slowed down
+	// Cap it as we said before so things don't explode when we hanged/slowed down
 	DeltaTime = DeltaTime > Commons::Constants::MAX_DELTA_TIME ? Commons::Constants::MAX_DELTA_TIME : DeltaTime;
 
 	return DeltaTime;

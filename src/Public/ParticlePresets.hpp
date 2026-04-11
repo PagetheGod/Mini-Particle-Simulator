@@ -114,7 +114,7 @@ namespace ParticlePresets
         .LifeTime = glm::vec2(2.f, 4.f),
         .Scale = glm::vec2(0.15f, 0.15f),
         .Speed = glm::vec2(0.5f, 2.5f),
-        .Gravity = 6.f,
+        .Gravity = 5.f,
         .ForceConfigData = { .Gravity = 6.f },
         .Shape = SpawnShape::Box,
         .Mode = EmitterMode::Continuous,
