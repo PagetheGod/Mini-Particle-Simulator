@@ -44,7 +44,7 @@ public:
     }
 private:
     SDL_Texture* CreateGaussianGlowTexture(float Diameter);
-    void RenderParticles(const bool IsPanelOpen);
+    void RenderParticles(const Commons::Layout::ViewportRect& VpRect);
     bool IsOutsideViewport(const float ScreenSize, const glm::vec2& InPos, const Commons::Layout::ViewportRect&
         InViewportRect);
 private:

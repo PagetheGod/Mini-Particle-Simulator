@@ -324,6 +324,9 @@ private:
     uint32_t m_SIMDWidth = 4;
     // Per-wind oscillation timers, we use the indices we already got for each force
     // To index into this
+    // Reusing future vectors to avoid heap allocation every frame
+    std::vector<std::future<void>> m_SpawnFutures;
+    std::vector<std::future<void>> m_UpdateFutures;
     float m_WindTimers[Commons::Constants::MAX_NUM_FORCES] = {};
     float m_TimeSinceLastBurst = 0.f;
     float m_EmitterLifeTime = 0.f;

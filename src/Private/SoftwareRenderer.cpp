@@ -136,7 +136,7 @@ void SoftwareRenderer::EndFrame(const bool IsPanelOpen)
 
 
     // Draw particles ONLY in the viewport region:
-    RenderParticles(IsPanelOpen);
+    RenderParticles(VpRect);
 
     // Remove the clip rect before drawing ImGui
     // ImGui needs to draw in the panel and status bar regions,
@@ -225,10 +225,9 @@ SDL_Texture* SoftwareRenderer::CreateGaussianGlowTexture(float Diameter) {
     return Texture;
 }
 
-void SoftwareRenderer::RenderParticles(const bool IsPanelOpen)
+void SoftwareRenderer::RenderParticles(const Commons::Layout::ViewportRect& VpRect)
 {
     using namespace Commons;
-    const Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
     for (uint32_t i = 0; i < m_ParticleManager->GetParticleCount(); i++)
     {
         // Transform particles' world positions into screen positions via 2D camera

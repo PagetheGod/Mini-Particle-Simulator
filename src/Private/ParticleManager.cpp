@@ -170,7 +170,6 @@ void ParticleManager::UpdateParticles(const ParticleSimulatorConfig& Config, flo
     {
         return;
     }
-
     /*
      * Update order:
      * 1: Forces — modifies velocities, must complete before position updates
@@ -312,7 +311,7 @@ void ParticleManager::SolveDrag(uint32_t StartParticleIndex, uint32_t Count, con
 
     // Precompute the drag coefficient times delta time
     // Would have to clamp here if we did not provide a max frame time in Commons
-    const float DragInfluence = (1.f - DragCoefficient * DeltaTime);
+    const float DragInfluence = std::max(0.f, 1.f - DragCoefficient * DeltaTime);
 
     for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
     {
@@ -491,7 +490,14 @@ void ParticleManager::CheckParticleLifeTime()
     // Go through all the particles, check their lifetime, if below 0, kill
     // This cast should be avoided in general, in our case this is fine since our
     // Particle count should never go over 100k
-    for (int i = static_cast<int>(m_ParticleCount); i >= 0; i--)
+    if (m_ParticleCount == 0)
+    {
+        // Now technically this is not needed since in our flow
+        // We already checked for it at the start of the UpdateParticles function, however,
+        // Since both CheckParticleY/LifeTime kill particles, we have a chance of exploding
+        return;
+    }
+    for (int i = static_cast<int>(m_ParticleCount - 1); i >= 0; i--)
     {
         if (m_ParticleStates.LifeTime[i] <= 0.f)
         {
@@ -504,6 +510,7 @@ void ParticleManager::CheckParticleY()
 {
     // Go through all the particles, check their Y coordinates
     // If it's smaller than our set kill Y, kill them
+    if (m_ParticleCount == 0) { return; }
     for (int i = static_cast<int>(m_ParticleCount - 1); i >= 0; i--)
     {
         if (m_ParticleStates.Py[i] <= KILL_Y)
@@ -729,7 +736,13 @@ glm::vec3 ParticleManager::SpawnParticles_Speed(float X, float Y, float Z, const
         Speed = Config.Speed.x;
     }
     // Normalize position to get outward direction, then scale by speed
-    const float InverseDistance = glm::inversesqrt(X * X + Y * Y + Z * Z);
+    const float DistSquare = X * X + Y * Y + Z * Z;
+    if (DistSquare < Constants::CUSTOM_EPSILON)
+    {
+        // Position is at origin — pick an arbitrary upward direction
+        return {0.f, Speed, 0.f};
+    }
+    const float InverseDistance = glm::inversesqrt(DistSquare);
     return {X * InverseDistance * Speed, Y * InverseDistance * Speed, Z * InverseDistance * Speed};
 }
 

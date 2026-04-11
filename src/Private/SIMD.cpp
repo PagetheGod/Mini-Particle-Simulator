@@ -51,8 +51,8 @@ void SIMDManager::CheckSIMDSupport()
     // OS supports AVX, let's check CPUID for AVX2 and AVX512 support
     // Apparently these are called Extended Features
     QueryCPUInfo(7, 0, Eax, Ebx, Ecx, Edx);
-    const bool HasAVX2 = (Edx & (1 << 5)) != 0;
-    const bool HasAVX512F = (Edx & (1 << 16)) != 0;
+    const bool HasAVX2 = (Ebx & (1 << 5)) != 0;
+    const bool HasAVX512F = (Ebx & (1 << 16)) != 0;
     if (!HasAVX2)
     {
         m_SIMDLevel = SIMDLevel::SSE2;
@@ -111,7 +111,6 @@ void SIMDManager::QueryCPUInfo(int LeafNumber, int SubleafNumber, uint32_t &Eax,
 #else
     // Clang/GCC, use __get_cpuid_count. This writes two individual uint
     // It returns 0 if a leaf is not supported
-    __get_cpuid_count(LeafNumber, SubleafNumber, &Eax, &Ebx, &Ecx, &Edx);
     __get_cpuid_count(LeafNumber, SubleafNumber, &Eax, &Ebx, &Ecx, &Edx);
 #endif
 }

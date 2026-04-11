@@ -79,7 +79,7 @@ namespace ParticlePresets
         .EmitterLifeTime = 5.f,
         .StartColor = glm::vec3(0.6f, 0.2f, 0.9f),
         .EndColor = glm::vec3(0.6f, 0.2f, 0.9f),
-        .ConeDimensions = glm::vec2(15.f, 30.f),
+        .ConeDimensions = glm::vec2(30.f, 30.f),
         .LifeTime = glm::vec2(3.f, 5.f),
         .Scale = glm::vec2(0.25f, 0.25f),
         .Speed = glm::vec2(0.f, 0.2f),
@@ -144,8 +144,8 @@ namespace ParticlePresets
                 .WindPeriod = 1.5f
             } , ForceData{.Strength = 0.5f}},
             .ForceTypes = { ForceType::Directional , ForceType::Drag},
-            .IsForceEnabled = { true },
-            .ExtraForceCount = 1
+            .IsForceEnabled = { true, true },
+            .ExtraForceCount = 2
         },
         .Shape = SpawnShape::Box,
         .Mode = EmitterMode::Continuous,

@@ -371,8 +371,6 @@ void Application::Run()
 	 */
 	bool Running = true;
 	DeltaTimeData DTData{};
-	// This config needs to persist through frame
-	// So we can easily check if any of the setting had changed
 	while (Running)
 	{
 		FrameTiming(DTData);

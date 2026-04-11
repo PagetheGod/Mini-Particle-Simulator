@@ -87,6 +87,8 @@ private:
     PlaybackState m_PlaybackState = PlaybackState::Stopped;
     float m_PlaybackLeft = 0.f;
     bool m_IsConfigDirty = false;
+    // This commit persists through the entire lifetime of the app
+    // So we can easily check
     ParticleSimulatorConfig m_ParticleConfig;
     // Constants
     // How long would we play the entire scene until we stop or loop

@@ -3,15 +3,17 @@
 VThreadPool::VThreadPool(size_t NumThreads, bool IsUsingCustomThreadCount)
 {
 	size_t ThreadCount = std::thread::hardware_concurrency();
+	if (ThreadCount == 0)
+	{
+		ThreadCount = 4;
+	}
 	if (!IsUsingCustomThreadCount)
 	{
 		NumThreads = ThreadCount / 2;
 	}
-	//Cap the thread count at maxium 3/4 of the hardware concurrency
-	if (NumThreads > ThreadCount * 0.75f)
-	{
-		NumThreads = ThreadCount * 0.75f;
-	}
+	// Clamp to [1, hardware_concurrency - 1] — leave 1 thread for the main thread
+	const size_t MaxThreads = std::max(static_cast<size_t>(1), ThreadCount - 1);
+	NumThreads = std::clamp(NumThreads, static_cast<size_t>(1), MaxThreads);
 
 	for (size_t i = 0; i < NumThreads; i++)
 	{

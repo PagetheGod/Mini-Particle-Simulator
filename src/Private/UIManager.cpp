@@ -185,7 +185,7 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
     if (Config.Mode == EmitterMode::Burst)
     {
         // How often does the emitter spawn particles in burst mode
-        IsConfigDirty |= ImGui::SliderFloat("Burst Interval", &Config.BurstInterval, 0.5f, 3.f);
+        IsConfigDirty |= ImGui::SliderFloat("Burst Interval", &Config.BurstInterval, 0.5f, 2.5f);
         // We reuse the Emitter Rate variable for both burst and continuous emitter
         IsConfigDirty |= ImGui::SliderInt("Particle Count Per Burst", &Config.EmissionRate,
             5, 3500);
@@ -376,9 +376,9 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // Min and max scales of the particles
             IsConfigDirty |= ImGui::SliderFloat("Size Min", &Config.Scale.x,
-                0.1f, 2.f, "%.1f");
+                0.1f, 1.5f, "%.1f");
             IsConfigDirty |= ImGui::SliderFloat("Size Max", &Config.Scale.y,
-                0.1f, 2.f, "%.1f");
+                0.1f, 1.5f, "%.1f");
             if (Config.Scale.x >= Config.Scale.y)
             {
                 Config.Scale.x = std::max(0.1f, Config.Scale.y - 0.1f);
@@ -387,7 +387,7 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         else
         {
             // No random interval for spawn size, just fixed
-            IsConfigDirty |= ImGui::SliderFloat("Size", &Config.Scale.x, 0.1f, 2.f, "%.1f");
+            IsConfigDirty |= ImGui::SliderFloat("Size", &Config.Scale.x, 0.1f, 1.5f, "%.1f");
         }
         Config.IsRandomScale = IsRandomScale;
 
@@ -400,28 +400,20 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
 bool UIManager::DrawParticleVisuals(ParticleSimulatorConfig &Config)
 {
     bool IsConfigDirty = false;
-    /* Color picker flags
+    /*
+     * Color picker flags
      * These flags configure what the picker widget displays.
      * We can change these to customize the picker appearance.
      * Available picker styles:
-     *   PickerHueWheel — circular hue ring with SV square inside
-     *   PickerHueBar   — vertical hue bar with SV square beside it
-     *
+     *   PickerHueWheel, circular hue ring with SV square inside
+     *   PickerHueBar vertical hue bar with SV square beside it
      * Available display modes :
-     *   DisplayRGB — show R, G, B number input boxes
-     *   DisplayHSV — show H, S, V number input boxes
-     *   DisplayHex — show hex input (#RRGGBB)
-     *
+     *   DisplayRGB, show R, G, B number input boxes
+     *   DisplayHSV, show H, S, V number input boxes
+     *   DisplayHex, show hex input (#RRGGBB)
      * Number format:
-     *   Float — show values as 0.000–1.000
-     *   (default) — show values as 0–255
-     *
-     * Other useful flags:
-     *   NoAlpha      — hide alpha even on ColorPicker4
-     *   NoSidePreview — hide the old/new color comparison swatch
-     *  NoSmallPreview — hide the small color preview before the label
-     *   NoInputs     — hide all number inputs (wheel/square only)
-     *   NoLabel      — hide the text label
+     *   Float, show values as 0.000–1.000
+     *   (default), show values as 0–255
      */
     ImGuiColorEditFlags ColorEditorFlags = ImGuiColorEditFlags_PickerHueBar | ImGuiColorEditFlags_DisplayRGB |
         ImGuiColorEditFlags_Float;
@@ -510,7 +502,7 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
     if (ImGui::CollapsingHeader("Forces Settings", ImGuiTreeNodeFlags_DefaultOpen))
     {
         // Gravity is always applied, no need to add
-        IsConfigDirty |= ImGui::SliderFloat("Gravity Scale", &ForceConfig.Gravity, 0.f, 10.f, "%.1f");
+        IsConfigDirty |= ImGui::SliderFloat("Gravity Scale", &ForceConfig.Gravity, 0.f, 5.f, "%.1f");
 
         ImGui::Separator();
         // Let the user knows that we only allow 9 extra forces at max
