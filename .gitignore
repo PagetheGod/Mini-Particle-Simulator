@@ -9,6 +9,7 @@ build*/
 *.user
 .vs/
 out/
+imgui.ini
 #idea
 .idea/
 #compiled shaders
