@@ -3,13 +3,14 @@
 //
 
 #include "SIMD.hpp"
-// For checking SIMD support on the CPU, MSVC uses intrin.h, while clang/gcc use cpuid.h
+#if defined(__x86_64__) || defined(_M_X64)
+
+// For checking SIMD support on the CPU, MSVC uses intrin.h, while clang/gcc use cpuid.h.
 #ifdef _MSC_VER
 #include <intrin.h>
 #else
 #include <cpuid.h>
 #endif
-
 
 void SIMDManager::CheckSIMDSupport()
 {
@@ -114,3 +115,17 @@ void SIMDManager::QueryCPUInfo(int LeafNumber, int SubleafNumber, uint32_t &Eax,
     __get_cpuid_count(LeafNumber, SubleafNumber, &Eax, &Ebx, &Ecx, &Edx);
 #endif
 }
+
+#else
+
+void SIMDManager::CheckSIMDSupport()
+{
+    m_SIMDLevel = SIMDLevel::Scalar;
+}
+
+uint32_t SIMDManager::GetSIMDWidth() const
+{
+    return 1;
+}
+
+#endif

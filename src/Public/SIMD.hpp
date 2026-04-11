@@ -2,29 +2,6 @@
 #ifndef MINIPARTICLESIMULATOR_SIMD_HPP
 #define MINIPARTICLESIMULATOR_SIMD_HPP
 #include <cstdint>
-// For both SIMD intrinsics and XGETBV to check OS support for SIMD
-#include <immintrin.h>
-
-
-
-
-
-/*
- * A class that is responsible for checking simd supports, and provide wrappers around all the
- * SIMD intrinsics, as of right now, it ONLY supports x86-64 SIMD intrinsics
- * No plan for ARM support for now
- * As of right now we are not really using this class, since we will be relying on compiler auto vectorization
- * It probably will do a better job than us for most cases. We can check the disassembly
- * to check if auto vectorizations are working
- * But I am keeping this class here because it's good practice and references for many interesting stuffs in C++
- *
- *
- *
- * Iso - Since you are on Mac(ARM64), these codes WILL NOT compile on your computer
- * Since these intrinsics are CPU-specific, these are for x86-64 CPUs only
- * And your intellisense might even complain about the functions being non-existent
- * That's expected and ok. Since Travis will test this using his PC, which uses x86 CPU
- */
 
 
 
@@ -37,6 +14,36 @@ enum class SIMDLevel : uint8_t
     AVX2, // 256-bit, process 8 floats at a time
     AVX512 // 512-bit, process 16 floats at a time
 };
+
+class SIMDManager
+{
+public:
+    SIMDManager() = default;
+    ~SIMDManager() = default;
+
+    void CheckSIMDSupport();
+
+    [[nodiscard]] uint32_t GetSIMDWidth() const;
+    [[nodiscard]] SIMDLevel GetSIMDLevel() const
+    {
+        return m_SIMDLevel;
+    }
+
+private:
+#if defined(__x86_64__) || defined(_M_X64)
+    // x86-specific helper used by the CPUID-based detection path.
+    void QueryCPUInfo(int LeafNumber, int SubleafNumber, uint32_t& Eax, uint32_t& Ebx, uint32_t& Ecx, uint32_t& Edx);
+#endif
+    SIMDLevel m_SIMDLevel = SIMDLevel::Scalar;
+};
+
+// Everything below this point is x86-64 only
+// On ARM (Apple Silicon), we fall back to scalar code paths
+// The compiler's auto-vectorization will handle NEON on ARM
+#if defined(__x86_64__) || defined(_M_X64)
+
+// For both SIMD intrinsics and XGETBV to check OS support for SIMD
+#include <immintrin.h>
 
 /*
  * Using explicit template specialization to provide SIMD traits for different levels
@@ -286,28 +293,6 @@ struct SIMDTraits<SIMDLevel::AVX512>
     }
 };
 
-
-class SIMDManager
-{
-public:
-    SIMDManager() = default;
-    ~SIMDManager() = default;
-
-
-    void CheckSIMDSupport();
-
-    [[nodiscard]] uint32_t GetSIMDWidth() const;
-    [[nodiscard]] SIMDLevel GetSIMDLevel() const
-    {
-        return m_SIMDLevel;
-    }
-private:
-    // Writing the ifdef/else/endif for msvc/clang+gcc more than once is enough to drive me nuts
-    // So here is a refactor to streamline invoking CPUID, we need a leaf number, subleaf
-    // And 4 uint32_t by reference to fill in
-    void QueryCPUInfo(int LeafNumber, int SubleafNumber, uint32_t& Eax, uint32_t& Ebx, uint32_t& Ecx, uint32_t& Edx);
-private:
-    SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
-};
+#endif // defined(__x86_64__) || defined(_M_X64)
 
 #endif //MINIPARTICLESIMULATOR_SIMD_HPP

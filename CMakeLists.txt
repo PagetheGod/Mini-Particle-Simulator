@@ -87,14 +87,10 @@ add_executable(${PROJECT_NAME}
         src/Private/Camera2D.cpp
 )
 
-# Conditionally compile SIMD.cpp only on x86-64
-# ARM (Apple Silicon) does not support x86 intrinsics
-if(IS_X86_64)
-    target_sources(${PROJECT_NAME} PRIVATE src/Private/SIMD.cpp)
-    # _xgetbv intrinsic (CPUID OS-support check) requires -mxsave on Clang/GCC
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-        set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
-    endif()
+# SIMD.cpp now provides both x86 detection and scalar fallbacks for ARM.
+# _xgetbv still needs -mxsave on the x86 code path for Clang/GCC.
+if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
 endif()
 
 # Compiler warnings — strict but not pedantic
