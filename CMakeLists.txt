@@ -288,10 +288,23 @@ if(BUILD_TESTING)
         src/Private/ThreadPool.cpp
     )
 
+    if(IS_X86_64)
+        target_sources(core_tests PRIVATE
+            tests/ParticleManagerTests.cpp
+            src/Private/ParticleManager.cpp
+            src/Private/VThreadPool.cpp
+            src/Private/SIMD.cpp
+        )
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+            set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
+        endif()
+    endif()
+
     target_include_directories(core_tests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/src/Public
         ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/src/ThirdParty/pcg/include
     )
 
     if(MSVC)
