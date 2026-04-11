@@ -1,4 +1,5 @@
 #include "VThreadPool.hpp"
+#include <algorithm>
 
 VThreadPool::VThreadPool(size_t NumThreads, bool IsUsingCustomThreadCount)
 {

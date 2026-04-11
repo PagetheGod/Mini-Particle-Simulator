@@ -3,6 +3,7 @@
 //
 
 #include "../Public/ThreadPool.hpp"
+#include <algorithm>
 // This is the main loop that all worker threads are born into.  They
 // wait for a signal on the work queue condition variable, then they
 // grab work off the queue.  Threads return when they notice that
