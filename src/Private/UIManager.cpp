@@ -528,6 +528,11 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
             {
                 if (ImGui::Selectable(ForceNames[i]))
                 {
+                    if (ForceConfig.ExtraForceCount >= Constants::MAX_NUM_FORCES)
+                    {
+                        ImGui::CloseCurrentPopup();
+                        break;
+                    }
                     const auto NewForceType = static_cast<enum ForceType>(i);
                     const uint8_t NewForceIndex = ForceConfig.ExtraForceCount;
 
