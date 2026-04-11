@@ -371,7 +371,7 @@ void Application::Run()
 		if (Result.Event == InputEvent::Quit)
 		{
 			Running = false;
-			// We can just get rid of the Running bool and break here
+			// We can just get rid of the Running bool and break here alternatively
 			continue;
 		}
 		// Toggle pause

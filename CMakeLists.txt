@@ -135,13 +135,13 @@ target_sources(${PROJECT_NAME} PRIVATE
 # Set up debug and release compiler options for all three compilers
 # Right now we are just supporting clang, but keeping this here for references
 target_compile_options(${PROJECT_NAME} PRIVATE
-	#MSVC
+	# MSVC
 	$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:/W4 /Od>
 	$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/W1 /O2 /Oi /GL>
-	#GCC
+	# GCC
 	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Debug>>:-Wall -Wextra -O0>
 	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:-w -O3 -flto=auto>
-	#Clang
+	# Clang
 	$<$<AND:$<CXX_COMPILER_ID:Clang>,$<CONFIG:Debug>>:-Wall -Wextra -O0>
 	$<$<AND:$<CXX_COMPILER_ID:Clang>,$<CONFIG:Release>>:-w -O3 -flto=auto>
 )

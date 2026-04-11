@@ -19,7 +19,6 @@ namespace ParticlePresets
         .LifeTime = glm::vec2(1.f, 3.f),
         .Scale = glm::vec2(0.4f, 0.4f),
         .Speed = glm::vec2(60.f, 120.f),
-        .Gravity = 1.5f,
         .ForceConfigData = { .Gravity = 1.5f },
         .Shape = SpawnShape::Sphere,
         .Mode = EmitterMode::Burst,
@@ -40,7 +39,6 @@ namespace ParticlePresets
         .LifeTime = glm::vec2(1.5f, 3.5f),
         .Scale = glm::vec2(0.3f, 0.3f),
         .Speed = glm::vec2(80.f, 160.f),
-        .Gravity = 3.f,
         .ForceConfigData = { .Gravity = 3.f },
         .Shape = SpawnShape::Cone,
         .Mode = EmitterMode::Continuous,
@@ -61,7 +59,6 @@ namespace ParticlePresets
         .LifeTime = glm::vec2(2.f, 4.f),
         .Scale = glm::vec2(0.25f, 0.25f),
         .Speed = glm::vec2(50.f, 100.f),
-        .Gravity = 2.5f,
         .ForceConfigData = { .Gravity = 2.5f },
         .Shape = SpawnShape::Cone,
         .Mode = EmitterMode::Continuous,
@@ -72,8 +69,8 @@ namespace ParticlePresets
         .IsRandomSpeed = true
     };
 
-    // Particles spiral around a central axis — uses ring so particles have
-    // vertical spread (Ring is purely XZ which is mostly invisible in 2D)
+    // Particles spiral around a central axis uses vortex so particles have
+    // vertical and horizontal spreads
     static constexpr ParticleSimulatorConfig Vortex {
         .EmissionRate = 500,
         .EmitterLifeTime = 5.f,
@@ -83,7 +80,6 @@ namespace ParticlePresets
         .LifeTime = glm::vec2(3.f, 5.f),
         .Scale = glm::vec2(0.25f, 0.25f),
         .Speed = glm::vec2(0.f, 0.2f),
-        .Gravity = 0.2f,
         .ForceConfigData = {
             .Gravity = 0.f,
             .ForceDataArray = { ForceData{
@@ -114,8 +110,7 @@ namespace ParticlePresets
         .LifeTime = glm::vec2(2.f, 4.f),
         .Scale = glm::vec2(0.15f, 0.15f),
         .Speed = glm::vec2(0.5f, 2.5f),
-        .Gravity = 5.f,
-        .ForceConfigData = { .Gravity = 6.f },
+        .ForceConfigData = { .Gravity = 5.f },
         .Shape = SpawnShape::Box,
         .Mode = EmitterMode::Continuous,
         .IsRandomColor = false,
@@ -135,7 +130,6 @@ namespace ParticlePresets
         .LifeTime = glm::vec2(4.f, 8.f),
         .Scale = glm::vec2(0.1f, 0.1f),
         .Speed = glm::vec2(0.3f, 0.8f),
-        .Gravity = 0.3f,
         .ForceConfigData = {
             .Gravity = 0.3f,
             .ForceDataArray = { ForceData{

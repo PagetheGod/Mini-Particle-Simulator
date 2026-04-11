@@ -72,7 +72,7 @@ struct ForceData
 
 struct ForceConfig
 {
-    float Gravity = 0.f;
+    float Gravity = 0.f; // The factor by which we scale 9.81, not gravity itself
     // Fixed size array to store all forces, using a fixed size array because we have an upper limit
     // of how many forces we can have (other than gravity)
     ForceData ForceDataArray[Commons::Constants::MAX_NUM_FORCES]{};
@@ -109,7 +109,6 @@ struct ParticleSimulatorConfig
     glm::vec2 LifeTime = glm::vec2(1.f, 2.f); // Min and max life time
     glm::vec2 Scale = glm::vec2(1.f, 2.f); // Min and max scale
     glm::vec2 Speed = glm::vec2(1.f, 2.f); // Min and max speed at spawn
-    float Gravity = 0.8f; // The factor by which we scale 9.81, not gravity itself
     ForceConfig ForceConfigData;
     // Put the single-byte members at the end so we don't waste space due to paddings
     // Probably doesn't matter in this case

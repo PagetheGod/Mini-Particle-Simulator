@@ -265,7 +265,7 @@ void ParticleManager::UpdateParticles(const ParticleSimulatorConfig& Config, flo
 void ParticleManager::SolveGravity(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime)
 {
     // Precompute scaled gravity's influences
-    const float ScaledGravityInfluence = GravityScale * Commons::Constants::GRAVITY * DeltaTime;
+    const float ScaledGravityInfluence = GravityScale * Constants::GRAVITY * DeltaTime;
 
     // Gravity pulls down in world space (negative Y direction)
     // Camera2D flips Y when converting to screen space
@@ -284,7 +284,15 @@ glm::vec3 ParticleManager::ComputeWindInfluence(const uint32_t ForceIndex, const
     constexpr float TWO_PI = glm::radians(360.f);
     m_WindTimers[ForceIndex] = glm::mod(m_WindTimers[ForceIndex], Period);
     const float SinTime = m_WindTimers[ForceIndex] * (TWO_PI / Period);
-    return Direction * Strength * glm::sin(SinTime) * DeltaTime;
+    // Added the missing normalization for wind direction vectors
+    // vector to avoid dividing by zero.
+    const float DirLengthSqr = glm::dot(Direction, Direction);
+    if (DirLengthSqr < Constants::CUSTOM_EPSILON)
+    {
+        return glm::vec3(0.f);
+    }
+    const glm::vec3 UnitDirection = Direction * glm::inversesqrt(DirLengthSqr);
+    return UnitDirection * Strength * glm::sin(SinTime) * DeltaTime;
 }
 
 void ParticleManager::SolveWind(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence)
@@ -379,7 +387,7 @@ void ParticleManager::SolvePointForce(uint32_t StartParticleIndex, uint32_t Coun
     /*
      * The __restrict__ qualifiers SHOULD inform the compilers that the pointers do not overlap
      * However godbolt showed that even with the qualifiers
-     * Clang seems to still run extra checks at run time, stange
+     * Clang seems to still run extra checks at run time, strange
      */
     float* restrict PosX = m_ParticleStates.Px.get() + StartParticleIndex;
     float* restrict PosY = m_ParticleStates.Py.get() + StartParticleIndex;

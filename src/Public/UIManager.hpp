@@ -29,7 +29,7 @@ public:
     bool UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorConfig& ParticleConfig,
         uint32_t ParticleCount, bool IsPaused);
 
-    //Getters and setters
+    // Getters and setters
     [[nodiscard]] bool IsPanelOpen() const { return m_IsPanelOpen; }
     void TogglePanelOpen() { m_IsPanelOpen = !m_IsPanelOpen; }
 
@@ -46,7 +46,7 @@ private:
     void DrawPanelCollapseButton();
 private:
     bool m_IsPanelOpen = true;
-    // It's a bandaid fix for the issue that we need the most up to date loop state
+    // It's a fix for the issue that we need the most up-to-date loop state
     bool m_ShouldLoop = true;
     std::function<void(bool)> m_ToggleLoopCallback;
 };

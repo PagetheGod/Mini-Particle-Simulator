@@ -38,10 +38,6 @@ public:
     void Run();
     bool Frame(const DeltaTimeData& InDeltaTimeData, const InputResult& Input);
 
-// Separate access modifiers to help organize functions and variables
-public:
-
-
 private:
     // Shows a modal dialog and returns the user's renderer choice.
     // This function creates a temporary SDL_Renderer, runs a mini event
@@ -53,8 +49,6 @@ private:
     float GetDeltaTime(uint64_t& LastNs);
     // Calculate delta time, FPS, and frame time each frame
     void FrameTiming(DeltaTimeData& DTData);
-    // Poll application events, this includes inputs, quit, and resizing(optional)
-    // This function will return
 private:
     SDL_Window* m_Window;
     RendererType m_RendererType;
@@ -62,7 +56,7 @@ private:
     std::unique_ptr<HardwareRenderer> m_HardwareRenderer;
     std::unique_ptr<UIManager> m_UIManager;
     std::unique_ptr<ParticleManager> m_ParticleManager;
-    InputManager m_InputManager;
+    InputManager m_InputManager; // Actual instance not a ptr because it's small
     Camera2D* m_Camera2D; // Raw ptr because we do not own it
     // States
     bool m_Paused = true;

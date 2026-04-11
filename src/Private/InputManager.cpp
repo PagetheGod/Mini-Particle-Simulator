@@ -10,7 +10,7 @@
 
 InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 {
-	InputResult Result = InputResult{};
+	InputResult Result{};
 	SDL_Event Event;
 	//Poll event does not block. It just checks message queue and returns right away regardless of presence of events
 	while (SDL_PollEvent(&Event))
@@ -23,10 +23,10 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 				Result.Event = InputEvent::Quit;
 				return Result;
 			}
-			//Event.key will contain a kb data
-			//key.key is the key code
-			//key.mod is the modifier state(Shift, Alt, Ctrl)
-			//key.repeat is this is a key-repeat event
+			// Event.key will contain a kb data
+			// key.key is the key code
+			// key.mod is the modifier state(Shift, Alt, Ctrl)
+			// key.repeat is this is a key-repeat event
 			case SDL_EVENT_KEY_DOWN:
 			{
 				//For now we ignore repeats, which is sent when user hold down the keys

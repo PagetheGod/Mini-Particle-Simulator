@@ -50,7 +50,7 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
      * On Windows is DX11/12
      * On MacOS is Metal
      * On Linux is OpenGL
-     * Despite using GPU-accelerated compositing, the PARTICLE RENDERING
+     * Despite using GPU-accelerated compositing, the particle rendering
      * is still CPU-based (SDL_RenderPoint / SDL_RenderGeometry).
      * ImGui rendering is handled by the SDL_Renderer too.
      */
@@ -72,7 +72,7 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
      * logical pixels(or points), the OS then scale them behind the scene to map
      * them to real pixels, this abstracts things away and make our life easier
      * However, in our case, we asked for High pixel density in app init because our fonts
-     * needed to look sharp and elligible, this means we have to work with real pixels now
+     * needed to look sharp and eligible, this means we have to work with real pixels now
      * And on mac, the 1920 x 1080 window has way more pixels because it's Retina
      * So we are drawing 1920 x 1080 pixels to a window that needs a much larger frame buffer
      *

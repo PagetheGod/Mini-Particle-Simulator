@@ -64,6 +64,9 @@ namespace Commons
         static constexpr float CUSTOM_EPSILON = 0.00001f;
 
     }
+    // There are many hardcoded screen/viewport size constants here
+    // This is intentional since we are not going to allow resizable window (bit more work than we can handle)
+    // So just using a bunch of constants is fine
     namespace Layout
     {
         // The size of the entire GUI window, this is fixed at start-up
