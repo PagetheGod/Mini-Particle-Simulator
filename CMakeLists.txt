@@ -9,7 +9,9 @@ project(
 	LANGUAGES C CXX
 )
 
-# C++ stuffs
+include(CTest)
+
+# C++ stuffs, set required C++ standards and disable compiler-specific extensions
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -275,6 +277,31 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Vulkan::Vulkan
     glm::glm
 )
+
+if(BUILD_TESTING)
+    add_executable(core_tests
+        tests/test_main.cpp
+        tests/Camera2DTests.cpp
+        tests/CommonsTests.cpp
+        tests/ThreadPoolTests.cpp
+        src/Private/Camera2D.cpp
+        src/Private/ThreadPool.cpp
+    )
+
+    target_include_directories(core_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/src/Public
+        ${CMAKE_SOURCE_DIR}/external/glm
+    )
+
+    if(MSVC)
+        target_compile_options(core_tests PRIVATE /W4)
+    else()
+        target_compile_options(core_tests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    add_test(NAME core_tests COMMAND core_tests)
+endif()
 
 # ---------------------------------------------------------------------------
 # Windows: Copy SDL3.dll next to the executable
