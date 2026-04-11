@@ -94,12 +94,26 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     ImGui::StyleColorsDark();
 
     // Load Roboto font at the correct size for the display's DPI scale.
-    // This produces sharp text at any scaling, unlike FontGlobalScale which
-    // just magnifies the default 13px bitmap font.
+    // Base size is 24 (1.5x the original 16) for readability - the stock
+    // ImGui default ends up too small on modern high-res monitors.
+    //
+    // On HiDPI (Retina) we rasterize at BaseFontSize * DpiScale = 48px so the
+    // glyph texture has the extra detail, then set FontGlobalScale = 1/DpiScale
+    // so ImGui draws the glyphs at their base 24-unit size in the logical
+    // canvas. Combined with SDL_SetRenderLogicalPresentation above, the 48px
+    // font texture maps 1:1 to physical pixels on a 2x display - pixel-perfect
+    // crisp text without blurry upscaling.
+    //
+    // SDL_GetBasePath() resolves to the directory containing the executable
+    // (where the CMake post-build step copies Roboto-Medium.ttf). A relative
+    // path would fail when the binary is invoked from the project root
+    // (e.g., `make run`), leaving ImGui's atlas empty and making every
+    // subsequent draw render against an invalid font texture.
+    constexpr float BaseFontSize = 24.f;
     const float DpiScale = SDL_GetWindowDisplayScale(m_Window);
     const char* BasePath = SDL_GetBasePath();
     const std::string FontPath = std::string(BasePath ? BasePath : "") + "Roboto-Medium.ttf";
-    ImFont* LoadedFont = ImGuiIO.Fonts->AddFontFromFileTTF(FontPath.c_str(), 16.f * DpiScale);
+    ImFont* LoadedFont = ImGuiIO.Fonts->AddFontFromFileTTF(FontPath.c_str(), BaseFontSize * DpiScale);
     if (LoadedFont == nullptr)
     {
         std::cerr << "Failed to load font from '" << FontPath
