@@ -931,12 +931,13 @@ template<SIMDLevel Level>
 void ParticleManager::SolveGravity(float *StartParticlePtr, uint32_t Count, float GravityScale, float DeltaTime)
 {
     using SIMDStruct = SIMDTraits<Level>;
+    constexpr uint32_t SIMDWidth = SIMDStruct::SIMDWidth;
     // Precompute
-    const float ScaledGravityInfluence = GravityScale * Commons::Constants::GRAVITY * DeltaTime;
+    const float ScaledGravityInfluence = GravityScale * Constants::GRAVITY * DeltaTime;
     auto BroadcastGravityInfluence = SIMDStruct::VectorizedBroadcast(ScaledGravityInfluence);
     // SIMD loop, just subtract the influence from all particle velocity
     uint32_t i = 0;
-    for (; i + m_SIMDWidth <= Count; i += m_SIMDWidth)
+    for (; i + SIMDWidth <= Count; i += SIMDWidth)
     {
         auto ParticleVelocity = SIMDStruct::VectorizedLoad(&StartParticlePtr[i]);
         auto NewVelocity = SIMDStruct::VectorizedAdd(ParticleVelocity, BroadcastGravityInfluence);

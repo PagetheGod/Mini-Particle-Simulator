@@ -320,7 +320,6 @@ private:
     // States trackers
     uint32_t m_ParticleCount = 0;
     SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
-    uint32_t m_SIMDWidth = 4;
     // Per-wind oscillation timers, we use the indices we already got for each force
     // To index into this
     // Reusing future vectors to avoid heap allocation every frame
