@@ -293,6 +293,7 @@ private:
     // These are some SIMD implementations for particle update functions I wrote at the start
     // Halfway through I realized that compiler auto-vectorizations might do a better job than I do
     // But I am keeping them here for now
+#if defined(__x86_64__) || defined(_M_X64)
     template<SIMDLevel Level>
     void UpdateParticlePositionForAxis(float* StartParticlePtr, uint32_t Count, const float* Velocity, float DeltaTime);
 
@@ -310,6 +311,7 @@ private:
     void SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
         const float DeltaTime, const glm::vec3& VortexCenter);
 
+#endif
     // Helper to create a float array aligned to specified boundary
     AlignedArray AllocateAlignedArray(size_t NumElements, size_t Alignment);
 private:

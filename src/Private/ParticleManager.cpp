@@ -864,6 +864,7 @@ void ParticleManager::UpdateParticleColor(const uint32_t StartParticleIndex, con
     }
 }
 
+#if defined(__x86_64__) || defined(_M_X64)
 template<SIMDLevel Level>
 void ParticleManager::UpdateParticlePositionForAxis(float *StartParticlePtr, uint32_t Count, const float *Velocity,
     float DeltaTime)
@@ -1136,6 +1137,7 @@ void ParticleManager::SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t C
         m_ParticleStates.Vz[i] += TangentZ * DtStrength - RadialZ * DtPull;
     }
 }
+#endif // defined(__x86_64__) || defined(_M_X64)
 
 
 
