@@ -132,7 +132,9 @@ target_sources(${PROJECT_NAME} PRIVATE
 # (e.g., -Wmaybe-uninitialized false positives at -O3) don't clutter
 # the CLI
 target_compile_options(${PROJECT_NAME} PRIVATE
-	# MSVC — /W4 is strict, /W1 is the most basic level
+	# MSVC: /W4 is strict, /W1 is the most basic level
+    # Is Microsoft normal? Like who the fuck names their warning flags
+    # 4100 and 4201, just use human-readable names like GCC and Clang please???
 	$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:/W4 /wd4100 /wd4201 /Od>
 	$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/W1 /O2 /Oi /GL>
 	# GCC
