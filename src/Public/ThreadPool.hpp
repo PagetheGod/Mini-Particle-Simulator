@@ -6,8 +6,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <future>
-#include <functional>
-#include <any>
+
 
 
 // A ThreadPool is, well, a pool of threads. ;)  A ThreadPool is an
@@ -82,5 +81,4 @@ class ThreadPool {
   // the function that our threads will run
   void thread_loop();
 };
-
 

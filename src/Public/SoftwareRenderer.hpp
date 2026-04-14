@@ -57,6 +57,6 @@ private:
     // Constants
     static constexpr float PARTICLE_TEXTURE_WIDTH = 64;
     static constexpr float PARTICLE_TEXTURE_HEIGHT = 64;
-    // World-scale to pixel-scale multiplier — a config scale of 1.0 renders as this many pixels
+    // World-scale to pixel-scale multiplier, a config scale of 1.0 renders as this many pixels
     static constexpr float BASE_PARTICLE_SCREEN_SIZE = 2.f;
 };

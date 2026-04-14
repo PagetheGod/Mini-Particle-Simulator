@@ -94,17 +94,6 @@ if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
 endif()
 
-# Compiler warnings, strict but not pedantic
-# Because many of the 3rd party stuffs will trigger warnings
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    target_compile_options(${PROJECT_NAME} PRIVATE
-        -Wall -Wextra -Wpedantic
-        -Wno-unused-parameter # ImGui callbacks often have unused params
-        -Wno-missing-field-initializers  # Vulkan structs use partial init
-    )
-elseif(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /W4 /wd4100 /wd4201)
-endif()
 
 
 
@@ -132,18 +121,26 @@ target_sources(${PROJECT_NAME} PRIVATE
     ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp         # GPU path
 )
 
-# Set up debug and release compiler options for all three compilers
-# Right now we are just supporting clang, but keeping this here for references
+# Compiler options: strict warnings and no optimization in Debug, basic
+# warnings and full optimization in Release.
+# Debug: -Wall -Wextra (strict but not -Wpedantic, which third-party libs
+# like ImGui and SDL triggers constantly). Plus -Wno-unused-parameter and
+# -Wno-missing-field-initializers because ImGui callbacks and SDL structs
+# often trigger those
+# Release: -Wall only. Keep the basic set so obvious bugs still show up
+# in optimized builds, but drop the others so build warnings
+# (e.g., -Wmaybe-uninitialized false positives at -O3) don't clutter
+# the CLI
 target_compile_options(${PROJECT_NAME} PRIVATE
-	# MSVC
-	$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:/W4 /Od>
+	# MSVC — /W4 is strict, /W1 is the most basic level
+	$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:/W4 /wd4100 /wd4201 /Od>
 	$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Release>>:/W1 /O2 /Oi /GL>
 	# GCC
-	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Debug>>:-Wall -Wextra -O0>
-	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:-w -O3 -flto=auto>
+	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Debug>>:-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -O0>
+	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<CONFIG:Release>>:-Wall -O3 -flto=auto>
 	# Clang
-	$<$<AND:$<CXX_COMPILER_ID:Clang>,$<CONFIG:Debug>>:-Wall -Wextra -O0>
-	$<$<AND:$<CXX_COMPILER_ID:Clang>,$<CONFIG:Release>>:-w -O3 -flto=auto>
+	$<$<AND:$<CXX_COMPILER_ID:Clang>,$<CONFIG:Debug>>:-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -O0>
+	$<$<AND:$<CXX_COMPILER_ID:Clang>,$<CONFIG:Release>>:-Wall -O3 -flto=auto>
 )
 
 # Enables link time optimizations for all three compilers. Learned from my ray tracer that this can make a huge difference
@@ -277,13 +274,11 @@ if(BUILD_TESTING)
         tests/test_main.cpp
         tests/Camera2DTests.cpp
         tests/CommonsTests.cpp
-        tests/ThreadPoolTests.cpp
         tests/ParticleManagerTests.cpp
         src/Private/ParticleManager.cpp
         src/Private/VThreadPool.cpp
         src/Private/SIMD.cpp
         src/Private/Camera2D.cpp
-        src/Private/ThreadPool.cpp
     )
 
     if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
@@ -304,6 +299,33 @@ if(BUILD_TESTING)
     endif()
 
     add_test(NAME core_tests COMMAND core_tests)
+
+    # Build the course provided catch2-based tests for thread pool
+    # We have to build this as a separate executable
+    # Because it has its own main and would conflict with our own test main
+    # if we got multiple entry points
+    add_executable(threadpool_catch_tests
+        tests/catch.cpp
+        tests/test_suite.cpp
+        tests/test_threadpool.cpp
+        src/Private/ThreadPool.cpp
+    )
+
+    target_include_directories(threadpool_catch_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/Public
+        ${CMAKE_SOURCE_DIR}/tests
+    )
+
+    if(MSVC)
+        target_compile_options(threadpool_catch_tests PRIVATE /W4)
+    else()
+        # Catch2 v3's amalgamated sources trip every pedantic warning we use,
+        # and the course-provided test file is off-limits. Relax warnings for
+        # this target only so third-party + provided code don't fail builds.
+        target_compile_options(threadpool_catch_tests PRIVATE -w)
+    endif()
+
+    add_test(NAME threadpool_catch_tests COMMAND threadpool_catch_tests)
 endif()
 
 
