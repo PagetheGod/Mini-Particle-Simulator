@@ -52,6 +52,35 @@ struct AllocatedVkBuffer
 	VkDeviceSize VulkanBufferSize = 0;
 };
 
+struct ParticleInstanceBuffers
+{
+	// SoA buffers for particle instance data
+	// One for each particle attributes, and same order as they are on the CPU side
+	AllocatedVkBuffer Px;
+	AllocatedVkBuffer Py;
+	AllocatedVkBuffer Pz;
+	AllocatedVkBuffer R;
+	AllocatedVkBuffer G;
+	AllocatedVkBuffer B;
+	AllocatedVkBuffer Size;
+	AllocatedVkBuffer LifeTime;
+	AllocatedVkBuffer MaxLifeTime;
+
+	/*
+	 * CPU pointers to the buffers above, one per buffer
+	 * These are persistently mapped GPU VRAM, and mapped once at init
+	 * They are returned by vkMapMemory
+	 */
+	void* MappedPtr[9] = {};
+	/*
+	 * The descriptor set bound to the graphic pipelines for this frame
+	 * This points to the 9 buffers above. Again, allocated once at init
+	 * These are bound per-frame in record frame command buffer
+	 */
+	VkDescriptorSet DescriptorSet = nullptr;
+};
+
+
 // This class encapsulates all Vulkan-specific behaviors:
 // Initializing vulkan, loading shaders, issuing draw calls, etc.
 class VulkanManager
@@ -157,6 +186,11 @@ public:
 		// 2 means double-buffering of command submission (not the swapchain).
 		static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 		uint32_t CurrentFrame = 0;
+
+		// New particle SoA instance buffers
+		ParticleInstanceBuffers ParticleInstanceBufferArray[MAX_FRAMES_IN_FLIGHT];
+		VkDescriptorSetLayout ParticleInstanceDescriptorSetLayout = nullptr;
+		VkDescriptorPool ParticleInstanceDescriptorPool = nullptr;
 	};
 private:
 	// Create vulkan instance with all the validation layers and SDL3 extensions
@@ -185,6 +219,15 @@ private:
 	bool CreateGraphicsPipeline();
 	bool CreateCommandPool();
 	bool AllocateCommandBuffers();
+	bool CreateParticleInstanceBuffers(uint32_t NumMaxParticles);
+	/*
+	 * We need three descriptor objects to actually wire the storage buffers to the shaders:
+	 * 1. Descriptor set layout, this describes what bindings the shader should expect(0 - 8, 9 buffers in set 0)
+	 * 2. Descriptor pool, this is where the descriptor sets are allocated from. Sized by max frames in flight, each
+	 * containing 9 storage buffer descriptors
+	 * 3. One descriptor set per frame in flight, each pointing at the frame's buffers
+	 */
+	bool CreateParticleDescriptorLayout();
 	AllocatedVkBuffer CreateBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage, VkMemoryPropertyFlags Properties);
 	void GPUCopyBuffer(VkBuffer SrcBuffer, VkBuffer DstBuffer, VkDeviceSize Size);
 	AllocatedVkBuffer CreateBufferWithData(const void* Data, VkDeviceSize Size, VkBufferUsageFlags Usage);

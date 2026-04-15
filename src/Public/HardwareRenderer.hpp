@@ -13,9 +13,6 @@
 
 #include "VulkanManager.hpp"
 
-// This class will manage vulkan side bussiness
-// Initializing vulkan, loading shaders, issuing draw calls, etc.
-
 
 class ParticleManager;
 

@@ -1007,8 +1007,67 @@ bool VulkanManager::AllocateCommandBuffers()
     return true;
 }
 
+bool VulkanManager::CreateParticleInstanceBuffers(uint32_t NumMaxParticles)
+{
+    /*
+     * The storage buffer holds NumMaxParticles floats. We got 55000 x 4 = 220000 bytes in each one
+     * We got 9 buffers and 2 frames in flight.
+     */
+    const VkDeviceSize BufferSize = NumMaxParticles * 4;
+
+    /*
+     * Properties for the GPU VRAM that will hold the buffers
+     * HOST_VISIBLE, basially dx11's CPU_READ_WRITE
+     * HOST_COHERENT, allows syncing between GPU and CPU without explicit
+     * vkFlushMappedMemoryRanges calls. This is a bit slower
+     */
+    const VkMemoryPropertyFlags MemoryProperties = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+    // Usage: STROAGE_BUFFER_BIT tells the shader to declare it ass StructuredBuffer
+    // No need for Transfer_src/dest bit because we are not copying, we are using CPU
+    // to write directly via mapped pointers
+    const VkBufferUsageFlags UsageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        ParticleInstanceBuffers& FrameInstanceBufferRef = m_VulkanContext.ParticleInstanceBufferArray[i];
+        // Get the pointers out of the ref
+        // Allocate all 9 buffers. The order must match
+        AllocatedVkBuffer* Buffers[9] = {
+            &FrameInstanceBufferRef.Px, &FrameInstanceBufferRef.Py, &FrameInstanceBufferRef.Pz,
+            &FrameInstanceBufferRef.R, &FrameInstanceBufferRef.G, &FrameInstanceBufferRef.B,
+            &FrameInstanceBufferRef.Size, &FrameInstanceBufferRef.LifeTime, &FrameInstanceBufferRef.MaxLifeTime
+        };
+        for (uint32_t j = 0; j < 9; j++)
+        {
+            *Buffers[j] = CreateBuffer(BufferSize, UsageFlags, MemoryProperties);
+            if (!Buffers[j]->VulkanBuffer)
+            {
+                std::fprintf(stderr, "Failed to allocate particle SoA buffer %u for frame %u\n", j, i);
+                return false;
+            }
+            /*
+             * We do persistant mapping. Call vkMapMemory once at this init, keep our mapped pointer
+             * So the buffer stays mapped until we free the memory. And we do not have to suffer from
+             * per frame map and unmap overhead
+             */
+            VkResult MapResult = vkMapMemory(m_VulkanContext.VulkanDevice, Buffers[i]->VulkanDeviceMemory, 0, BufferSize,
+                0, &FrameInstanceBufferRef.MappedPtr[j]);
+            if (MapResult != VK_SUCCESS)
+            {
+                std::cerr << "Failed to map particle buffer! VkResult: " << MapResult << '\n';
+            }
+        }
+    }
+}
+
+
+bool VulkanManager::CreateParticleDescriptorLayout()
+{
+    
+}
+
 AllocatedVkBuffer VulkanManager::CreateBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage,
-    VkMemoryPropertyFlags Properties)
+                                              VkMemoryPropertyFlags Properties)
 {
     AllocatedVkBuffer Buffer;
     Buffer.VulkanBufferSize = Size;
