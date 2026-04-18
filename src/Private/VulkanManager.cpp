@@ -1063,7 +1063,7 @@ bool VulkanManager::CreateParticleInstanceBuffers(uint32_t NumMaxParticles)
 
 bool VulkanManager::CreateParticleDescriptorLayout()
 {
-    
+
 }
 
 AllocatedVkBuffer VulkanManager::CreateBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage,
