@@ -84,7 +84,7 @@ namespace ParticlePresets
             .Gravity = 0.f,
             .ForceDataArray = { ForceData{
                 .Direction = glm::vec3(0.f, 0.f, 0.f),
-                .Strength = 10.f,
+                .Strength = 5.f,
                 .VortexPull = 15.f
             } },
             .ForceTypes = { ForceType::Vortex },

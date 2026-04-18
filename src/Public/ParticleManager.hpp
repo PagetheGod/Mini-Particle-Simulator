@@ -106,9 +106,9 @@ struct ParticleSimulatorConfig
         glm::vec2 CylinderDimensions; // Radius, height
         float SphereRadius;
     };
-    glm::vec2 LifeTime = glm::vec2(1.f, 2.f); // Min and max life time
-    glm::vec2 Scale = glm::vec2(1.f, 2.f); // Min and max scale
-    glm::vec2 Speed = glm::vec2(1.f, 2.f); // Min and max speed at spawn
+    glm::vec2 LifeTime = glm::vec2(1.f, 5.f); // Min and max life time
+    glm::vec2 Scale = glm::vec2(1.f, 1.5f); // Min and max scale
+    glm::vec2 Speed = glm::vec2(1.f, 10.f); // Min and max speed at spawn
     ForceConfig ForceConfigData;
     // Put the single-byte members at the end so we don't waste space due to paddings
     // Probably doesn't matter in this case
