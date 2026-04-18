@@ -26,7 +26,9 @@ Application::~Application()
     SDL_DestroyWindow(m_Window);
     SDL_Quit();
 }
-
+// For this project we are just printing all errors to cerr
+// But there are better ways to show errors, either outputting through a message box
+// Or recording them to a log file
 bool Application::Initialize() {
 	bool Result = false;
 	if (!SDL_Init(SDL_INIT_VIDEO))

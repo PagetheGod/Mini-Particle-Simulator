@@ -164,6 +164,9 @@ using AlignedArray = std::unique_ptr<float[], AlignedDeleter>;
  */
 struct ParticleStates
 {
+    // We stored the Z coordinate related data here because we were planning to do 3D
+    // But it turned out to be too much work so we scaled down to 2D only
+    // Keeping the Z here for future update opportunities
     AlignedArray Px;
     AlignedArray Py;
     AlignedArray Pz;
@@ -194,7 +197,7 @@ public:
 
     ~ParticleManager() = default;
 
-    //Actual work functions
+    // Actual work functions
     // Allocated all the arrays holding the particle states, this does not actually initialize the particle data
     // We spawn particles according to config we get from the UI Manager
     void InitializeParticles();
@@ -204,7 +207,7 @@ public:
         const bool IsConfigDirty);
 
 
-    //Getters and setters
+    // Getters and setters
     [[nodiscard]] uint32_t GetParticleCount() const {
         return m_ParticleCount;
     }
@@ -290,19 +293,8 @@ private:
         const glm::vec3& ForcePosition, const float Strength, const float Radius, const float DeltaTime);
 
 
-    // These are some SIMD implementations for particle update functions I wrote at the start
-    // Halfway through I realized that compiler auto-vectorizations might do a better job than I do
-    // But I am keeping them here for now
+   // Custom SIMD functions
 #if defined(__x86_64__) || defined(_M_X64)
-    template<SIMDLevel Level>
-    void UpdateParticlePositionForAxis(float* StartParticlePtr, uint32_t Count, const float* Velocity, float DeltaTime);
-
-    template<SIMDLevel Level>
-    void UpdateParticleLifeTime(float* StartParticlePtr, uint32_t Count, float DeltaTime);
-
-    template<SIMDLevel Level>
-    void SolveGravity(float* StartParticlePtr, uint32_t Count, float GravityScale, float DeltaTime);
-
     template<SIMDLevel Level>
     void SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
         const float Strength, const float Radius, const float DeltaTime);
@@ -318,15 +310,14 @@ private:
     ParticleStates m_ParticleStates;
     std::unique_ptr<VThreadPool> m_VThreadPool;
     SIMDManager m_SIMDManager;
-
     // States trackers
     uint32_t m_ParticleCount = 0;
     SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
-    // Per-wind oscillation timers, we use the indices we already got for each force
-    // To index into this
     // Reusing future vectors to avoid heap allocation every frame
     std::vector<std::future<void>> m_SpawnFutures;
     std::vector<std::future<void>> m_UpdateFutures;
+    // Per-wind oscillation timers, we use the indices we already got for each force
+    // To index into this. Not the most elegant, but works for our purposes
     float m_WindTimers[Commons::Constants::MAX_NUM_FORCES] = {};
     float m_TimeSinceLastBurst = 0.f;
     float m_EmitterLifeTime = 0.f;

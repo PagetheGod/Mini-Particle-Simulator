@@ -94,7 +94,7 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     ImGui::StyleColorsDark();
 
     /* Bump padding, spacing, scrollbar width, etc. by the same 1.5x factor
-     *as the font so widgets don't look cramped around the bigger text.
+     * as the font so widgets don't look cramped around the bigger text.
      * ImGui auto sizes content rects to fit the font, but the gaps between
      * widgets stay at defaults unless we scale them ourselves.
     */
@@ -132,11 +132,11 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
                   << "'. Falling back to ImGui default font." << std::endl;
         ImGuiIO.Fonts->AddFontDefault();
     }
-    /* On HiDPI (Retina) we rasterize at BaseFontSize * DpiScale = 48px so the
+    /* On HiDPI (Retina) we rasterize at BaseFontSize * DpiScale, so the
      * font texture has the extra detail, then set FontGlobalScale = 1/DpiScale
-     * so ImGui draws the glyphs at their base 24-unit size in the logical
-     * canvas. Combined with SDL_SetRenderLogicalPresentation above, the 48px
-     * font texture maps 1:1 to physical pixels on a 2x display - pixel-perfect
+     * so ImGui draws the texts at their base 36 units size in the logical
+     * canvas. Combined with SDL_SetRenderLogicalPresentation above, the
+     * font texture maps 1:1 to physical pixels on a 2x display, pixel-perfect
      * crisp text without blurry upscaling.
      */
     ImGuiIO.FontGlobalScale = 1.f / DpiScale;
@@ -183,13 +183,13 @@ void SoftwareRenderer::EndFrame(const bool IsPanelOpen)
     SDL_SetRenderLogicalPresentation(m_Renderer, Layout::RENDER_WIDTH, Layout::RENDER_HEIGHT,
         SDL_LOGICAL_PRESENTATION_LETTERBOX);
     // Clear the entire screen with the background color.
-    SDL_SetRenderDrawColorFloat(m_Renderer, 0.06f, 0.06f, 0.08f, 1.0f);
+    SDL_SetRenderDrawColorFloat(m_Renderer, 0.09f, 0.09f, 0.09f, 1.0f);
     SDL_RenderClear(m_Renderer);
 
     // Clip particle drawing to the viewport
     // SDL_SetRenderClipRect restricts all subsequent draw calls to
     // the given rectangle. This is the software equivalent of Vulkan's
-    // VkScissor(I am not doing that) — particles physically cannot render outside this rect.
+    // VkScissor(I am not doing that), articles will not render outside this rect.
     const Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
     const float ScaleX = Layout::RENDER_WIDTH / VpRect.Width;
     const float ScaleY = Layout::RENDER_HEIGHT / VpRect.Height;
@@ -231,8 +231,6 @@ SDL_Texture* SoftwareRenderer::CreateGaussianGlowTexture(float Diameter) {
      * f(x, y) = e^(-[(x - 0)^2 + (y - 0)^2)/2*sigma^2)
      *
      */
-
-
     // Create a CPU-side surface to fill pixel by pixel
     SDL_Surface* Surface = SDL_CreateSurface(Diameter, Diameter, SDL_PIXELFORMAT_RGBA8888);
     if (!Surface)
@@ -290,6 +288,12 @@ SDL_Texture* SoftwareRenderer::CreateGaussianGlowTexture(float Diameter) {
     return Texture;
 }
 
+/* This function actually introduces a major bottle neck
+ * Namely that we are submitting a draw call for EVERY particle, which is slow
+ * A better way to do it would be batch rendering, basically a single draw call
+ * for all particles
+ * But since our particle count is low we are sticking with this right now
+ */
 void SoftwareRenderer::RenderParticles(const Commons::Layout::ViewportRect& VpRect)
 {
     using namespace Commons;
@@ -299,7 +303,7 @@ void SoftwareRenderer::RenderParticles(const Commons::Layout::ViewportRect& VpRe
         const glm::vec3 WorldPoS = m_ParticleManager->GetParticlePos(i);
         const glm::vec2 ScreenPos = m_Camera->WorldToScreen(WorldPoS.x, WorldPoS.y, VpRect);
 
-        // Scale the particle — multiply by BASE_PARTICLE_SCREEN_SIZE because config
+        // Scale the particle, multiply by BASE_PARTICLE_SCREEN_SIZE because config
         // scale values (0.1-1.0) were designed for 3D projection, not direct pixel mapping
         const float ScreenSize = m_ParticleManager->GetParticleScale(i) * m_Camera->GetZoom() * BASE_PARTICLE_SCREEN_SIZE;
 

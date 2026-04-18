@@ -36,7 +36,7 @@ void UIManager::DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t Par
     ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, STATUS_BAR_HEIGHT));
 
     // Window flags: no decorations, no interaction, no scrolling.
-    // NoBackground is NOT set — we want a solid background to clearly
+    // NoBackground is not set, we want a solid background to clearly
     // separate the status bar from the particle viewport above.
     ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |

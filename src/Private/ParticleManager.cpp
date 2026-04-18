@@ -19,9 +19,13 @@ using namespace Commons;
 
 void ParticleManager::InitializeParticles()
 {
-    // Allocate the aligned arrays for all particle states
-    // We are using 64-byte alignment to account for all three SIMD alignment requirements
-    // SSE2 - 16, AVX2 - 32, AVX512 - 64 bytes. All match their vector register width
+    /* Allocate the aligned arrays for all particle states
+     * We are using 64-byte alignment to account for all three SIMD alignment requirements
+     * Come to think of it this here alone does not guarantee alignment, since we are dispatching
+     * particles to different threads by chunks. Very possible that a thread gets a chunk of 10 particles
+     * and that's basically 40 bytes which does not align well
+     */
+    // Should be doing some null checking here
     m_ParticleStates.Px = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
     m_ParticleStates.Py = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
     m_ParticleStates.Pz = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
@@ -37,7 +41,7 @@ void ParticleManager::InitializeParticles()
 
     // Start the thread pool, with 16 threads, thread pool already has clamping logics
     m_VThreadPool = std::make_unique<VThreadPool>(NUM_THREADS_USED, true);
-    // Initialize the SIMD manager and get back the SIMD levels and widths
+    // Initialize the SIMD manager and get back the SIMD level
     m_SIMDManager = SIMDManager();
     m_SIMDLevel = m_SIMDManager.GetSIMDLevel();
 }
@@ -865,91 +869,6 @@ void ParticleManager::UpdateParticleColor(const uint32_t StartParticleIndex, con
 }
 
 #if defined(__x86_64__) || defined(_M_X64)
-template<SIMDLevel Level>
-void ParticleManager::UpdateParticlePositionForAxis(float *StartParticlePtr, uint32_t Count, const float *Velocity,
-    float DeltaTime)
-{
-    using SIMDStruct = SIMDTraits<Level>;
-    // Broadcast delta time to all lanes
-    // This is auto because... it depends on what functions are generated
-    // In other words, I have no idea what the type is lmao
-    auto BroadcastDt = SIMDStruct::VectorizedBroadcast(DeltaTime);
-
-    // Main loop with SIMD
-    // We process until the REMAINING number of particles are less than the SIMD WIDTH
-    // We declare the loop counter outside because we need it to process the remainders
-    uint32_t i = 0;
-    // Note the loop condition, imagine we are using SSE2(4 floats) and we got 4 particles
-    // 0 + 4 == count, this means we will enter the SIMD loop and process the 4 floats, correct
-    // if we did < count, 0 + 4 !< count, we would have done scalar codes incorrectly
-    for (; i + SIMDStruct::WIDTH <= Count; i += SIMDStruct::WIDTH)
-    {
-        // Load particle positions, number of particle processed = width
-        auto ParticlePos = SIMDStruct::VectorizedLoad(&StartParticlePtr[i]);
-        // Load velocities
-        auto ParticleVel = SIMDStruct::VectorizedLoad(&Velocity[i]);
-        // We then multiply velocities by delta time
-        auto ParticleDisplacement = SIMDStruct::VectorizedMul(ParticleVel, BroadcastDt);
-        // Then add the displacements to positions
-        auto NewParticlePos = SIMDStruct::VectorizedAdd(ParticlePos, ParticleDisplacement);
-        // Don't forget to store the results back!
-        SIMDStruct::VectorizedStore(&StartParticlePtr[i], NewParticlePos);
-    }
-
-    // Pick up the remainder
-    for (; i < Count; i++)
-    {
-        StartParticlePtr[i] += Velocity[i] * DeltaTime;
-    }
-}
-
-template<SIMDLevel Level>
-void ParticleManager::UpdateParticleLifeTime(float *StartParticlePtr, uint32_t Count, float DeltaTime)
-{
-    using SIMDStruct = SIMDTraits<Level>;
-
-    // Again, broadcast delta time
-    auto BroadcastDt = SIMDStruct::VectorizedBroadcast(DeltaTime);
-
-    uint32_t i = 0;
-    // This main loop is much easier, just subtract delta time from all the particles
-    // Hmmm, looking at the actual logics, there's a pretty big chance that
-    // Compilers will auto vectorize this code and it will probably does a better job than I do
-    for (; i + SIMDStruct::VectorSize <= Count; i += SIMDStruct::SIMDWidth)
-    {
-        auto ParticleLifeTime = SIMDStruct::VectorizedLoad(&StartParticlePtr[i]);
-        auto NewLifeTime = SIMDStruct::VectorizedSub(ParticleLifeTime, BroadcastDt);
-        SIMDStruct::VectorizedStore(&StartParticlePtr[i], NewLifeTime);
-    }
-    // Clean up remainder
-    for (; i < Count; i++)
-    {
-        StartParticlePtr[i] -= DeltaTime;
-    }
-}
-
-template<SIMDLevel Level>
-void ParticleManager::SolveGravity(float *StartParticlePtr, uint32_t Count, float GravityScale, float DeltaTime)
-{
-    using SIMDStruct = SIMDTraits<Level>;
-    constexpr uint32_t SIMDWidth = SIMDStruct::SIMDWidth;
-    // Precompute
-    const float ScaledGravityInfluence = GravityScale * Constants::GRAVITY * DeltaTime;
-    auto BroadcastGravityInfluence = SIMDStruct::VectorizedBroadcast(ScaledGravityInfluence);
-    // SIMD loop, just subtract the influence from all particle velocity
-    uint32_t i = 0;
-    for (; i + SIMDWidth <= Count; i += SIMDWidth)
-    {
-        auto ParticleVelocity = SIMDStruct::VectorizedLoad(&StartParticlePtr[i]);
-        auto NewVelocity = SIMDStruct::VectorizedAdd(ParticleVelocity, BroadcastGravityInfluence);
-        SIMDStruct::VectorizedStore(&StartParticlePtr[i], NewVelocity);
-    }
-    for (; i < Count; i++)
-    {
-        StartParticlePtr[i] += ScaledGravityInfluence;
-    }
-}
-
 /*
  * I decided to add custom SIMD implementations of point and vortex force solvers
  * because after pasting our scalar versions into godbolt
@@ -957,13 +876,13 @@ void ParticleManager::SolveGravity(float *StartParticlePtr, uint32_t Count, floa
  * Clang still generates many extra instructions to check whether pointers overlap at run time
  * Which is a waste
  */
-
 template <SIMDLevel Level>
 void ParticleManager::SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count,
     const glm::vec3& ForcePosition, const float Strength, const float Radius, const float DeltaTime)
 {
     using SIMDStruct = SIMDTraits<Level>;
     constexpr uint32_t SIMDWidth = SIMDStruct::SIMDWidth;
+    // Calculate strength scaled by delta time
     const float DtStrength = Strength * DeltaTime;
 
     // Broadcast loop-invariant values
@@ -989,15 +908,13 @@ void ParticleManager::SolvePointForce_Vector(uint32_t StartParticleIndex, uint32
 
         // Distance squared
         auto DistSquare = SIMDStruct::VectorizedAdd(
-            SIMDStruct::VectorizedAdd(
-                SIMDStruct::VectorizedMul(DeltaX, DeltaX),
-                SIMDStruct::VectorizedMul(DeltaY, DeltaY)),
+            SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedMul(DeltaX, DeltaX), SIMDStruct::VectorizedMul(DeltaY, DeltaY)),
             SIMDStruct::VectorizedMul(DeltaZ, DeltaZ));
 
         // Clamp to epsilon before rsqrt to prevent div by 0
         auto ClampedDistSquare = SIMDStruct::VectorizedMax(DistSquare, Epsilon);
         auto InvDist = SIMDStruct::VectorizedRSqrt(ClampedDistSquare);
-        // Dist = 1 / InvDist, but we can also get it from DistSquare * InvDist (= sqrt(DistSquare))
+        // Dist = 1 / InvDist, but we can also get it from DistSquare * InvDist
         auto Dist = SIMDStruct::VectorizedMul(ClampedDistSquare, InvDist);
 
         // Normalize direction
@@ -1017,7 +934,7 @@ void ParticleManager::SolvePointForce_Vector(uint32_t StartParticleIndex, uint32
         // Force magnitude = Strength * dt * smoothstep
         auto ForceInfluence = SIMDStruct::VectorizedMul(StrengthVec, Falloff);
 
-        // Load velocities, apply force along normalized direction, store back
+        // Load velocities, apply force along normalized direction, then store back
         auto AdjustedVx = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vx[i]);
         auto AdjustedVy = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vy[i]);
         auto AdjustedVz = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vz[i]);
