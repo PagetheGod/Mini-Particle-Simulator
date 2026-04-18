@@ -3,10 +3,8 @@
 //
 
 
-#include <cstdlib>
 #include <iostream>
-#include "glm/gtc/random.hpp"
-#include "glm/gtx/common.inl"
+#include "glm/gtc/constants.hpp"
 
 #include "ParticleManager.hpp"
 #ifdef _MSC_VER
@@ -222,7 +220,6 @@ void ParticleManager::UpdateParticles(const ParticleSimulatorConfig& Config, flo
 
     // Color, positions, and lifetime, these can also be synchronized
     // These are independent per-particle but depend on forces being done
-
     /*
      * Note that we are doing all three together because this introduces less overhead
      * If we separate these three, then we have to do three times the number of locks/unlocks
@@ -283,6 +280,7 @@ glm::vec3 ParticleManager::ComputeWindInfluence(const uint32_t ForceIndex, const
     // Each wind force has its own timer so multiple winds oscillate independently
     m_WindTimers[ForceIndex] += DeltaTime;
     // Wrap to [0, Period) so this number doesn't grow forever
+    // Period would not be 0 given our setup, UI clamped it, and the init code set it to 1.5
     constexpr float TWO_PI = glm::radians(360.f);
     m_WindTimers[ForceIndex] = glm::mod(m_WindTimers[ForceIndex], Period);
     const float SinTime = m_WindTimers[ForceIndex] * (TWO_PI / Period);

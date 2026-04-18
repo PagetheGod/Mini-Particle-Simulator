@@ -1,9 +1,7 @@
 ﻿// External libs and STLs
-#include <iostream>
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
-#include <format>
-#include "SDL3/SDL_render.h"
+#include "SDL3/SDL_events.h"
 // Own headers
 #include "InputManager.hpp"
 #include "Commons.hpp"

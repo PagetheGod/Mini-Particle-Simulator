@@ -1,14 +1,6 @@
 ﻿//External libs and STL
-#include <format>
 #include <utility>
-#include "SDL3/SDL_render.h"
-#include "imgui_internal.h"
-#include <iostream>
-#include "SDL3/SDL_init.h"
-#include "SDL3/SDL_vulkan.h"
 #include "imgui.h"
-#include "imgui_impl_sdl3.h"
-#include "imgui_impl_sdlrenderer3.h"
 //Own headers
 #include "Commons.hpp"
 #include "UIManager.hpp"
@@ -570,6 +562,7 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                         {
                             NewForceDataRef.Strength = 5.f;
                             NewForceDataRef.Direction = {-1.f, 0.f, 0.f};
+                            NewForceDataRef.WindPeriod = 1.5f;
                             break;
                         }
                         default:
