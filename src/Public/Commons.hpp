@@ -106,7 +106,7 @@ namespace Commons
             float Height = VIEWPORT_HEIGHT_OPEN;
         };
         // Helper function to get viewport dimensions based on setting panel state(collapsed/open)
-        static ViewportRect GetViewportRect(const bool IsPanelOpen)
+        inline ViewportRect GetViewportRect(const bool IsPanelOpen)
         {
             if (IsPanelOpen) {
                 return ViewportRect { 0.f, 0.f, VIEWPORT_WIDTH_OPEN, VIEWPORT_HEIGHT_OPEN };
