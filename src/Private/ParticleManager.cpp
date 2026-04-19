@@ -235,8 +235,10 @@ void ParticleManager::UpdateParticles(const ParticleSimulatorConfig& Config, flo
         Futures.push_back(m_VThreadPool->SubmitTask(
             [this, i, ChunkCount, &Config, DeltaTime]()
             {
-                // Color scaling over lifetime only if user asks for it
-                if (Config.IsScalingColor)
+                // Color scaling over lifetime only if user asks for it.
+                // Randomized color at spawn has higher priority, if IsRandomColor is on,
+                // we do not scale color
+                if (Config.IsScalingColor && !Config.IsRandomColor)
                 {
                     UpdateParticleColor(i, ChunkCount, Config.StartColor, Config.EndColor);
                 }

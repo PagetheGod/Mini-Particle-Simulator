@@ -431,6 +431,9 @@ bool UIManager::DrawParticleVisuals(ParticleSimulatorConfig &Config)
 
     ImGui::Spacing();
 
+    // Random per-particle color takes precedence over scaling, so grey out
+    // the whole scale-color block when randomization is on.
+    ImGui::BeginDisabled(Config.IsRandomColor);
     bool IsScalingColor = Config.IsScalingColor;
     IsConfigDirty |= ImGui::Checkbox("Scale color", &IsScalingColor);
     Config.IsScalingColor = IsScalingColor;
@@ -482,6 +485,7 @@ bool UIManager::DrawParticleVisuals(ParticleSimulatorConfig &Config)
         ImGui::Text("Start to End Color Transition Preview");
         ImGui::Spacing();
     }
+    ImGui::EndDisabled();
     IsConfigDirty |= ImGui::Checkbox("Randomize Colors for Individual Particle", &Config.IsRandomColor);
     if (ImGui::IsItemHovered())
     {
