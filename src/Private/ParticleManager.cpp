@@ -58,14 +58,13 @@ void ParticleManager::ParticleFrame(const float DeltaTime, const ParticleSimulat
         m_TimeSinceLastBurst = 0.f;
         m_EmitterLifeTime = Config.EmitterLifeTime;
     }
-    SpawnParticles(Config, IsConfigDirty, DeltaTime);
+    SpawnParticles(Config, DeltaTime);
     UpdateParticles(Config, DeltaTime);
 }
 
 
 
-void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, const bool /*IsConfigDirty*/,
-    const float DeltaTime)
+void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, const float DeltaTime)
 {
     // We are already at limit, skip spawning for this frame
     if (m_ParticleCount >= NUM_MAX_PARTICLES || m_EmitterLifeTime <= 0.f)
@@ -107,7 +106,7 @@ void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, cons
         const uint32_t ChunkEnd = std::min(i + NumParticlesPerThread, std::min(m_ParticleCount +
             NumParticleSpawn, NUM_MAX_PARTICLES));
         const uint32_t ChunkCount = ChunkEnd - i;
-        SpawnFutures.push_back(SpawnParticles_Dispatch(i, ChunkCount, Config, DeltaTime));
+        SpawnFutures.push_back(SpawnParticles_Dispatch(i, ChunkCount, Config));
     }
     // Wait for all spawn tasks to finish before updating particle count
     // Newly spawned particles must be fully initialized before UpdateParticles reads them
@@ -120,7 +119,7 @@ void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, cons
 }
 
 std::future<void> ParticleManager::SpawnParticles_Dispatch(uint32_t StartIndex, uint32_t Count,
-    const ParticleSimulatorConfig& Config, const float DeltaTime)
+    const ParticleSimulatorConfig& Config)
 {
     // Submit the spawn task to the thread pool by wrapping it in a lambda
     // This way std::bind doesn't get confused and copy our ref params
@@ -128,37 +127,37 @@ std::future<void> ParticleManager::SpawnParticles_Dispatch(uint32_t StartIndex, 
     {
         case SpawnShape::Sphere:
         {
-            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config]()
             {
-                SpawnParticles_Sphere(StartIndex, Count, Config, DeltaTime);
+                SpawnParticles_Sphere(StartIndex, Count, Config);
             });
         }
         case SpawnShape::Box:
         {
-            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config]()
             {
-                SpawnParticles_BoxPlane(StartIndex, Count, Config, DeltaTime);
+                SpawnParticles_BoxPlane(StartIndex, Count, Config);
             });
         }
         case SpawnShape::Cone:
         {
-            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config]()
             {
-                SpawnParticles_Cone(StartIndex, Count, Config, DeltaTime);
+                SpawnParticles_Cone(StartIndex, Count, Config);
             });
         }
         case SpawnShape::Cylinder:
         {
-            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config]()
             {
-                SpawnParticles_Cylinder(StartIndex, Count, Config, DeltaTime);
+                SpawnParticles_Cylinder(StartIndex, Count, Config);
             });
         }
         case SpawnShape::Ring:
         {
-            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config, DeltaTime]()
+            return m_VThreadPool->SubmitTask([this, StartIndex, Count, &Config]()
             {
-                SpawnParticles_RingDisc(StartIndex, Count, Config, DeltaTime);
+                SpawnParticles_RingDisc(StartIndex, Count, Config);
             });
         }
     }
@@ -533,7 +532,8 @@ void ParticleManager::CheckParticleY()
 }
 
 
-void ParticleManager::SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config, const float /*DeltaTime*/)
+void ParticleManager::SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_t Count,
+    const ParticleSimulatorConfig& Config)
 {
     /*
      * Use spherical coordinates to spawn the particles
@@ -588,7 +588,7 @@ void ParticleManager::SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_
 }
 
 void ParticleManager::SpawnParticles_BoxPlane(uint32_t StartParticleIndex, uint32_t Count,
-    const ParticleSimulatorConfig& Config, const float /*DeltaTime*/)
+    const ParticleSimulatorConfig& Config)
 {
     // This one is more straightforward, just [-width, width), [-height, height), etc...
     for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
@@ -617,7 +617,7 @@ void ParticleManager::SpawnParticles_BoxPlane(uint32_t StartParticleIndex, uint3
 }
 
 void ParticleManager::SpawnParticles_RingDisc(uint32_t StartParticleIndex, uint32_t Count,
-    const ParticleSimulatorConfig& Config, const float /*DeltaTime*/)
+    const ParticleSimulatorConfig& Config)
 {
     // Same thing with cylinder, but now the RMin is provided by the user
     // And we have no height
@@ -653,7 +653,7 @@ void ParticleManager::SpawnParticles_RingDisc(uint32_t StartParticleIndex, uint3
 }
 
 void ParticleManager::SpawnParticles_Cylinder(uint32_t StartParticleIndex, uint32_t Count,
-    const ParticleSimulatorConfig& Config, const float /*DeltaTime*/)
+    const ParticleSimulatorConfig& Config)
 {
     /*
      * Again we use polar coordinates, but same issue with sphere
@@ -693,7 +693,7 @@ void ParticleManager::SpawnParticles_Cylinder(uint32_t StartParticleIndex, uint3
 }
 
 void ParticleManager::SpawnParticles_Cone(uint32_t StartParticleIndex, uint32_t Count,
-    const ParticleSimulatorConfig& Config, const float /*DeltaTime*/)
+    const ParticleSimulatorConfig& Config)
 {
     /*
      * This one is computationally heavier since not much can be precomputed

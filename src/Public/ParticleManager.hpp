@@ -236,9 +236,9 @@ public:
 private:
     // Granular particle functions that will be called by particle frame()
 
-    void SpawnParticles(const ParticleSimulatorConfig& Config, const bool IsConfigDirty, const float DeltaTime);
+    void SpawnParticles(const ParticleSimulatorConfig& Config, const float DeltaTime);
     std::future<void> SpawnParticles_Dispatch(uint32_t StartIndex, uint32_t Count,
-        const ParticleSimulatorConfig& Config, const float DeltaTime);
+        const ParticleSimulatorConfig& Config);
     void UpdateParticles(const ParticleSimulatorConfig& Config, float DeltaTime);
 
 
@@ -258,16 +258,11 @@ private:
     void CheckParticleLifeTime();
     void CheckParticleY();
     // Particle spawn functions for each shape, these only set position
-    void SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
-        const float DeltaTime);
-    void SpawnParticles_BoxPlane(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
-        const float DeltaTime);
-    void SpawnParticles_RingDisc(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
-        const float DeltaTime);
-    void SpawnParticles_Cylinder(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
-        const float DeltaTime);
-    void SpawnParticles_Cone(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
-        float DeltaTime);
+    void SpawnParticles_Sphere(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config);
+    void SpawnParticles_BoxPlane(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config);
+    void SpawnParticles_RingDisc(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config);
+    void SpawnParticles_Cylinder(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config);
+    void SpawnParticles_Cone(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config);
     // Shared spawn helpers, these are the same for all shapes
     glm::vec3 SpawnParticles_Speed(float X, float Y, float Z, const ParticleSimulatorConfig& Config);
     glm::vec3 SpawnParticles_Color(const ParticleSimulatorConfig& Config);
@@ -327,6 +322,4 @@ private:
     static constexpr float KILL_Y = -1000.f;
 
 };
-
-
 
