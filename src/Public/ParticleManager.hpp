@@ -87,8 +87,8 @@ struct ForceConfig
  */
 struct ParticleSimulatorConfig
 {
-    float BurstInterval = 0.f;
-    int EmissionRate = 0;
+    float BurstInterval = 0.5f;
+    int EmissionRate = 1;
     float EmitterLifeTime = 0.f;
     glm::vec3 StartColor = glm::vec3(1.f);
     glm::vec3 EndColor = glm::vec3(1.f);
