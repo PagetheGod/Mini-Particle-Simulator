@@ -43,7 +43,6 @@ private:
     bool DrawParticleVisuals(ParticleSimulatorConfig& Config);
     bool DrawForceSettings(ForceConfig& ForceConfig);
     void DrawPanelExpandButton();
-    void DrawPanelCollapseButton();
 private:
     bool m_IsPanelOpen = true;
     // It's a fix for the issue that we need the most up-to-date loop state

@@ -23,8 +23,6 @@ bool UIManager::UIFrame(const DeltaTimeData& InDeltaTimeData, ParticleSimulatorC
     }
     DrawStatusBar(InDeltaTimeData, ParticleCount, IsPaused);
     IsConfigDirty = GetParticleSimulatorConfig(ParticleConfig);
-    // Draw the collapse button at last so it doesn't get drawn over by settings panel
-    DrawPanelCollapseButton();
     return IsConfigDirty;
 }
 
@@ -68,7 +66,7 @@ void UIManager::DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t Par
     {
         ImGui::Text("Simulation Running");
     }
-    ImGui::Text("Press Space to toggle pause");
+    ImGui::Text("Press Space to toggle pause. Press Tab to toggle viewport");
     ImGui::End();
 }
 
@@ -623,11 +621,12 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                     }
                     case ForceType::Point:
                     {
+                        ImGui::Text("Positive Strength = attraction, Negative Strength = repulsion");
+                        ImGui::Spacing();
                         IsConfigDirty |= ImGui::SliderFloat("Point Force Strength", &ForceDataRef.Strength,
                             -75.f, 75.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Influence Radius", &ForceDataRef.PointRadius,
                             1.f, 350.f, "%.0f");
-                        ImGui::Text("Positive Strength = attraction, Negative Strength = repulsion");
                         IsConfigDirty |= ImGui::SliderFloat("Position X", &ForceDataRef.Direction.x,-50.f, 50.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Position Y", &ForceDataRef.Direction.y, -50.f, 50.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Position Z", &ForceDataRef.Direction.z, 0.f, 20.f, "%.1f");
@@ -680,17 +679,20 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
 
 void UIManager::DrawPanelExpandButton() {
     using namespace Commons;
-    // Draw the "expand panel" button at the top-right corner
-    constexpr float ButtonWidth = 45.f;
-    constexpr float ButtonHeight = 35.f;
+    // Size the window to the actual label at the current font/style scale.
+    // Hardcoded sizes conflict agaisnt the ScaleAllSizes(UIScale) bump in SoftwareRenderer
+    // the label overruns and only the first couple of chars end up visible.
+    const ImGuiStyle& Style = ImGui::GetStyle();
+    constexpr const char* Label = "<< Expand Panel";
+    const ImVec2 TextSize = ImGui::CalcTextSize(Label);
+    const float WindowWidth = TextSize.x + Style.FramePadding.x * 2.f + Style.WindowPadding.x * 2.f;
+    const float WindowHeight = TextSize.y + Style.FramePadding.y * 2.f + Style.WindowPadding.y * 2.f;
     constexpr float ButtonMargin = 8.5f;
 
-    // Set where we will draw the button, it's Set Next Window pos
-    // Because the NextWindow is our button
+    // Anchor to the top right corner of the window
     ImGui::SetNextWindowPos(
-        ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) -
-               ButtonWidth - ButtonMargin, ButtonMargin));
-    ImGui::SetNextWindowSize(ImVec2(ButtonWidth, ButtonHeight));
+        ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) - WindowWidth - ButtonMargin, ButtonMargin));
+    ImGui::SetNextWindowSize(ImVec2(WindowWidth, WindowHeight));
 
     // Just like WIN32, when we create any window, we need to set flags
     ImGuiWindowFlags Flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
@@ -699,7 +701,7 @@ void UIManager::DrawPanelExpandButton() {
 
     // Begin ImGui Frame again
     ImGui::Begin("Panel Toggle Button", nullptr, Flags);
-    if (ImGui::Button("<< Expand Panel"))
+    if (ImGui::Button(Label))
     {
         m_IsPanelOpen = true;
     }
@@ -713,59 +715,23 @@ void UIManager::DrawPanelExpandButton() {
     /* ANOTHER Tab hint (bottom-right corner) in case the expand button got ignored
      * Small semi-transparent text reminding the user they can press Tab.
      * This does obstruct user's view and disappears when the UI is opened.
-     *
      */
-    constexpr float TabHintLength = 200.f;
-    constexpr float TabHintHeight = 25.f;
-    ImGui::SetNextWindowPos(ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) - TabHintLength,
-               static_cast<float>(Layout::WINDOW_HEIGHT) - TabHintHeight));
-    ImGui::SetNextWindowSize(ImVec2(200.0f, 25.0f));
+    constexpr const char* HintLabel = "Press Tab to restore UI";
+    const ImVec2 HintTextSize = ImGui::CalcTextSize(HintLabel);
+    const float HintWidth = HintTextSize.x + Style.WindowPadding.x * 2.f;
+    const float HintHeight = HintTextSize.y + Style.WindowPadding.y * 2.f;
+    ImGui::SetNextWindowPos(ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) - HintWidth,
+               static_cast<float>(Layout::WINDOW_HEIGHT) - HintHeight));
+    ImGui::SetNextWindowSize(ImVec2(HintWidth, HintHeight));
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushStyleColor(ImGuiCol_WindowBg,
                           ImVec4(0.0f, 0.0f, 0.0f, 0.3f));
 
     ImGui::Begin("Tab Hint", nullptr, Flags);
-    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.5f),
-                       "Press Tab to restore UI");
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.5f), "%s", HintLabel);
     ImGui::End();
 
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
-}
-
-void UIManager::DrawPanelCollapseButton()
-{
-    // This function is very similar to the DrawPanelExpandButton()
-    // Difference is this is drawed a collapse instead of expand button
-    using namespace Commons;
-    // Draw the "collapse panel" button at the top-right corner
-    constexpr float ButtonWidth = 45.f;
-    constexpr float ButtonHeight = 35.f;
-    constexpr float ButtonMargin = 8.5f;
-
-    // Set where we will draw the button, it's Set Next Window pos
-    // Because the NextWindow is our button
-    ImGui::SetNextWindowPos(
-        ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) -
-               ButtonWidth - ButtonMargin, ButtonMargin));
-    ImGui::SetNextWindowSize(ImVec2(ButtonWidth, ButtonHeight));
-
-    // Just like WIN32, when we create any window, we need to set flags
-    ImGuiWindowFlags Flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoFocusOnAppearing |
-        ImGuiWindowFlags_NoBringToFrontOnFocus;
-
-    // Begin ImGui Frame again
-    ImGui::Begin("Panel Toggle Button", nullptr, Flags);
-    if (ImGui::Button("Collapse Panel >>"))
-    {
-        m_IsPanelOpen = false;
-    }
-    if (ImGui::IsItemHovered())
-    {
-        // Tool tip is short, just use SetToolTip
-        ImGui::SetTooltip("Collapse the settings panel and status bar (hotkey Tab)");
-    }
-    ImGui::End();
 }
