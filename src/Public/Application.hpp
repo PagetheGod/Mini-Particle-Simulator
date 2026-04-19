@@ -9,7 +9,7 @@
 /*
 * This class will handle the GUI application, including:
 * 1. Initialization and init error handling. It will set up both ImGUI and SDL3, and Vulkan backend(optional)
-* 2. Run the main loop - poll events, draw the immediate mode UI for ImGUI, and issue draw calls
+* 2. Run the main loop: poll events, draw the immediate mode UI for ImGUI, and issue draw calls
 * 3. Initialize thread pool, fill the particle object pool
 */
 

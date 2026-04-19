@@ -24,7 +24,7 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 			// Event.key will contain a kb data
 			// key.key is the key code
 			// key.mod is the modifier state(Shift, Alt, Ctrl)
-			// key.repeat is this is a key-repeat event
+			// key.repeat is this is a key repeat event
 			case SDL_EVENT_KEY_DOWN:
 			{
 				//For now we ignore repeats, which is sent when user hold down the keys

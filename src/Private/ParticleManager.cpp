@@ -324,6 +324,8 @@ void ParticleManager::SolveDrag(uint32_t StartParticleIndex, uint32_t Count, con
     // Would have to clamp here if we did not provide a max frame time in Commons
     const float DragInfluence = std::max(0.f, 1.f - DragCoefficient * DeltaTime);
 
+    // This loop might now auto vectorize well, since the compiler has to generate
+    // instructions to check whether the three pointers overlap
     for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
     {
         // We need to multiply each velocity by the drag influence
@@ -521,7 +523,10 @@ void ParticleManager::CheckParticleY()
 {
     // Go through all the particles, check their Y coordinates
     // If it's smaller than our set kill Y, kill them
-    if (m_ParticleCount == 0) { return; }
+    if (m_ParticleCount == 0)
+    {
+        return;
+    }
     for (int i = static_cast<int>(m_ParticleCount - 1); i >= 0; i--)
     {
         if (m_ParticleStates.Py[i] <= KILL_Y)

@@ -10,6 +10,7 @@
 
 
 // This class implements the rendering logics by using SDL3's built in software renderer
+// It says "software" but it's not fully CPU rendering. We still use GPU acceleration
 class SoftwareRenderer
 {
 public:
@@ -26,11 +27,10 @@ public:
     // Returns true on success.
     bool Initialize(SDL_Window *window);
 
+    // Particles~
     void RenderFrame(const bool IsPanelOpen);
 
-
     // Called at the start of each frame, before any ImGui calls.
-
     void BeginFrame(const bool IsPanelOpen);
 
     // Called after ImGui::Render(), draws ImGui + clears the background.
@@ -52,11 +52,12 @@ private:
     SDL_Window* m_Window;
     SDL_Texture* m_ParticleTexture;
     ParticleManager* m_ParticleManager;
+    // This can just be a plain Camera2D on the stack as well
     std::unique_ptr<Camera2D> m_Camera;
 
     // Constants
     static constexpr float PARTICLE_TEXTURE_WIDTH = 64;
     static constexpr float PARTICLE_TEXTURE_HEIGHT = 64;
-    // World-scale to pixel-scale multiplier, a config scale of 1.0 renders as this many pixels
+    // World scale to pixel scale multiplier, a config scale of 1.f renders as this many pixels
     static constexpr float BASE_PARTICLE_SCREEN_SIZE = 2.f;
 };
