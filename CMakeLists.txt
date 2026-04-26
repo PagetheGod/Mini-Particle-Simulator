@@ -89,7 +89,7 @@ add_executable(${PROJECT_NAME}
 )
 
 # SIMD.cpp now provides both x86 detection and scalar fallbacks for ARM.
-# _xgetbv still needs -mxsave on the x86 code path for Clang/GCC.
+# _xgetbv needs -mxsave on the x86 code path for Clang/GCC.
 if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
 endif()
@@ -128,8 +128,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 # -Wno-missing-field-initializers because ImGui callbacks and SDL structs
 # often trigger those
 # Release: -Wall only. Keep the basic set so obvious bugs still show up
-# in optimized builds, but drop the others so build warnings
-# (e.g., -Wmaybe-uninitialized false positives at -O3) don't clutter
+# in optimized builds, but drop the others so build warnings don't clutter
 # the CLI
 target_compile_options(${PROJECT_NAME} PRIVATE
 	# MSVC: /W4 is strict, /W1 is the most basic level
@@ -302,7 +301,7 @@ if(BUILD_TESTING)
 
     add_test(NAME core_tests COMMAND core_tests)
 
-    # Build the course provided catch2-based tests for thread pool
+    # Build the course provided catch2 based tests for thread pool
     # We have to build this as a separate executable
     # Because it has its own main and would conflict with our own test main
     # if we got multiple entry points
@@ -321,9 +320,8 @@ if(BUILD_TESTING)
     if(MSVC)
         target_compile_options(threadpool_catch_tests PRIVATE /W4)
     else()
-        # Catch2 v3's amalgamated sources trip every pedantic warning we use,
-        # and the course-provided test file is off-limits. Relax warnings for
-        # this target only so third-party + provided code don't fail builds.
+        # Catch2 sources will trigger many pedantic warnings. Relax warnings for
+        # this target only so third party and provided code don't fail builds.
         target_compile_options(threadpool_catch_tests PRIVATE -w)
     endif()
 
