@@ -109,7 +109,7 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	const bool IsPanelOpen = m_UIManager->IsPanelOpen();
 
 	// BeginFrame starts the ImGui frame, must come before any widget calls
-	m_SoftwareRenderer->BeginFrame(IsPanelOpen);
+	m_SoftwareRenderer->BeginFrame();
 
 	// Handle input
 	if (Input.Event == InputEvent::ToggleViewport)

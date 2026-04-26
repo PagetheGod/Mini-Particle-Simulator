@@ -27,11 +27,8 @@ public:
     // Returns true on success.
     bool Initialize(SDL_Window *window);
 
-    // Particles~
-    void RenderFrame(const bool IsPanelOpen);
-
     // Called at the start of each frame, before any ImGui calls.
-    void BeginFrame(const bool IsPanelOpen);
+    void BeginFrame();
 
     // Called after ImGui::Render(), draws ImGui + clears the background.
     void EndFrame(const bool IsPanelOpen);

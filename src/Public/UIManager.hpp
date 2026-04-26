@@ -10,7 +10,7 @@
 struct DeltaTimeData
 {
     float DeltaTime = 0.f;
-    int FPS = 0.f;
+    int FPS = 0;
     float FrameTime = 0.f;
 };
 

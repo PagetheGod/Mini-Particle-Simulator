@@ -158,13 +158,8 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     return true;
 }
 
-void SoftwareRenderer::RenderFrame(const bool IsPanelOpen)
-{
-    BeginFrame(IsPanelOpen);
-    EndFrame(IsPanelOpen);
-}
 
-void SoftwareRenderer::BeginFrame(const bool IsPanelOpen)
+void SoftwareRenderer::BeginFrame()
 {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();

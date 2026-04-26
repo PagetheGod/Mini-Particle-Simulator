@@ -307,6 +307,8 @@ private:
     SIMDManager m_SIMDManager;
     // States trackers
     uint32_t m_ParticleCount = 0;
+    // For now this member remains unused since we hardcoded SSE2 for all SIMD usages
+    // For compatibility
     SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
     // Reusing future vectors to avoid heap allocation every frame
     std::vector<std::future<void>> m_SpawnFutures;
