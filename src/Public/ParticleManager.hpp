@@ -208,6 +208,11 @@ public:
 
 
     // Getters and setters
+    [[nodiscard]] const ParticleStates* GetParticleStates() const
+    {
+        // This is const because in our current design we don't modify the states through ptr returned by this getter
+        return &m_ParticleStates;
+    }
     [[nodiscard]] uint32_t GetParticleCount() const {
         return m_ParticleCount;
     }
@@ -319,7 +324,7 @@ private:
     float m_TimeSinceLastBurst = 0.f;
     float m_EmitterLifeTime = 0.f;
     // Constants
-    static constexpr uint32_t NUM_MAX_PARTICLES = 55000;
+    static constexpr uint32_t NUM_MAX_PARTICLES = 100'000;
     static constexpr uint32_t NUM_THREADS_USED = 16;
     static constexpr float KILL_Y = -1000.f;
 

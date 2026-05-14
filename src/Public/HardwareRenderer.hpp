@@ -11,10 +11,8 @@
 #include <memory>
 #include <glm/glm.hpp>
 
+#include "ParticleManager.hpp"
 #include "VulkanManager.hpp"
-
-
-class ParticleManager;
 
 class HardwareRenderer
 {
@@ -33,15 +31,24 @@ public:
 public:
 
 private:
+	/* Upload per frame particle state data, this would be called after vkWaitFences for this frame's fence
+	 * And after the CPU's physics calculations. The fence finishing guarantees that the GPU is done
+	 * reading the particle data buffers from the previous use of this slot
+	 * CurrentFrame is the index mod max frame in flight, same index used for command buffer reuse
+	 */
+	void UploadParticleData(uint32_t CurrentFrame, const ParticleStates& InParticleStates,
+		uint32_t ParticleCount);
+
+private:
 	std::unique_ptr<VulkanManager> m_VulkanManager;
 	ParticleManager* m_ParticleManager;
-
+	VulkanContext* m_VulkanContextPtr;
 
 	// Constants
 	/*
 	 * An array that contains the six vertices of the two triangles that make up a single particle
 	 * Similar to what I did back in DX11, when we use instance rendering with something like particles
-	 * You create a small "vertex buffer" like this and the GPU shaders will use the instance buffer
+	 * We create a small "vertex buffer" like this and the GPU shaders will use the instance buffer
 	 * to handle the actual transforms
 	 */
 	static constexpr float QuadVertices[] = {

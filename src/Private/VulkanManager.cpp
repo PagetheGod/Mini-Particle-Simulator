@@ -1063,7 +1063,127 @@ bool VulkanManager::CreateParticleInstanceBuffers(uint32_t NumMaxParticles)
 
 bool VulkanManager::CreateParticleDescriptorLayout()
 {
+    /*
+     * We have 9 bindings in total, these descriptors describe the storage buffers
+     * for vertex instance data
+     * They are at set 0, bindings 0 to 8. The binding number must match the [[vk::binding(N,0)]] annotations
+     * in the vertex shader. The order is and must be:
+     * 0 - Px, 1 - Py, 2 - Pz, 3 - R, 4 - G, 5 - B, 6 - Size, 7 - Lifetime, 8 - MaxLifeTime
+     */
+    VkResult Result;
+    VkDescriptorSetLayoutBinding Bindings[9] = {};
+    for (uint32_t i = 0; i < 9; i++)
+    {
+        Bindings[i].binding = i;
+        Bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        Bindings[i].descriptorCount = 1;
+        // Only visible to the vertex shader for now
+        Bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        Bindings[i].pImmutableSamplers = nullptr;
+    }
 
+    VkDescriptorSetLayoutCreateInfo DSLayoutCreateInfo = {};
+    DSLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    DSLayoutCreateInfo.bindingCount = 9; // Remember we got 9 bindings in total, 1 for each particle state
+    DSLayoutCreateInfo.pBindings = Bindings;
+
+    Result = vkCreateDescriptorSetLayout(m_VulkanContext.VulkanDevice, &DSLayoutCreateInfo, nullptr, &m_VulkanContext.ParticleInstanceDescriptorSetLayout);
+    if (Result != VK_SUCCESS)
+    {
+        std::cerr << "Failed to create descriptor set layout! VkResult: " << Result << '\n';
+        return false;
+    }
+    return true;
+
+}
+
+bool VulkanManager::CreateParticleDescriptorPoolsAndSets()
+{
+    // For descriptor pool, we needd MAX_FRAME_IN_FLIGHT sets (2), each containing 9 storage buffer
+    // descriptors. So total number of descriptors = 9 * MAX_FRAME_IN_FLIGHT
+    VkDescriptorPoolSize PoolSize{};
+    PoolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    PoolSize.descriptorCount = 9 * VulkanContext::MAX_FRAMES_IN_FLIGHT;
+
+    VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo = {};
+    DescriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    DescriptorPoolCreateInfo.poolSizeCount = 1;
+    DescriptorPoolCreateInfo.pPoolSizes = &PoolSize;
+    DescriptorPoolCreateInfo.maxSets = VulkanContext::MAX_FRAMES_IN_FLIGHT;
+
+    VkResult Result = vkCreateDescriptorPool(m_VulkanContext.VulkanDevice, &DescriptorPoolCreateInfo, nullptr, &m_VulkanContext.ParticleInstanceDescriptorPool);
+    if (Result != VK_SUCCESS)
+    {
+        std::cerr << "Failed to create descriptor pool! VkResult: " << Result << '\n';
+        return false;
+    }
+
+    // Allocate one descriptor set per frame in flight
+    VkDescriptorSetLayout Layouts[VulkanContext::MAX_FRAMES_IN_FLIGHT];
+    for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        Layouts[i] = m_VulkanContext.ParticleInstanceDescriptorSetLayout;
+    }
+
+    VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo = {};
+    DescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    DescriptorSetAllocateInfo.descriptorPool = m_VulkanContext.DescriptorPool;
+    DescriptorSetAllocateInfo.descriptorSetCount = VulkanContext::MAX_FRAMES_IN_FLIGHT;
+    DescriptorSetAllocateInfo.pSetLayouts = Layouts;
+
+    VkDescriptorSet DescriptorSets[VulkanContext::MAX_FRAMES_IN_FLIGHT];
+    Result = vkAllocateDescriptorSets(m_VulkanContext.VulkanDevice, &DescriptorSetAllocateInfo, DescriptorSets);
+    if (Result != VK_SUCCESS)
+    {
+        std::cerr << "Failed to allocate descriptor set! VkResult: " << Result << '\n';
+        return false;
+    }
+    for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        m_VulkanContext.DescriptorSets[i] = DescriptorSets[i];
+    }
+
+    /*
+     * Update each set to point to its frames's buffers
+     * We only do this once at init because none of our particle state buffers changes their structures during runtime
+     * But if we ever have to change their structure (not sure what would need it, hot reload?), we would have to do this
+     * again
+     */
+    for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        ParticleInstanceBuffers& BufferSet = m_VulkanContext.ParticleInstanceBufferArray[i];
+        // Build VkDescriptorBufferInfo for all 9 buffers
+        VkDescriptorBufferInfo DescriptorBufferInfo[9] = {};
+        AllocatedVkBuffer* Buffers[9] = {
+            &BufferSet.Px, &BufferSet.Py, &BufferSet.Pz,
+            &BufferSet.R, &BufferSet.G, &BufferSet.B,
+            &BufferSet.Size, &BufferSet.LifeTime, &BufferSet.MaxLifeTime
+        };
+        for (uint32_t j = 0; j < 9; j++)
+        {
+            DescriptorBufferInfo[i].buffer = Buffers[j]->VulkanBuffer;
+            DescriptorBufferInfo[i].offset = 0;
+            DescriptorBufferInfo[i].range = Buffers[j]->VulkanBufferSize; // Entire buffer
+        }
+        // Build VkWriteDescriptorSet for all bindings
+        VkWriteDescriptorSet WriteDescriptorSets[9] = {};
+        for (uint32_t j = 0; j < 9; j++)
+        {
+            WriteDescriptorSets[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            WriteDescriptorSets[j].dstSet = m_VulkanContext.DescriptorSets[j];
+            WriteDescriptorSets[j].dstBinding = j; // Matches the binding N in shaders
+            WriteDescriptorSets[j].dstArrayElement = 0;
+            WriteDescriptorSets[j].descriptorCount = 1;
+            WriteDescriptorSets[j].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            WriteDescriptorSets[j].pBufferInfo = &DescriptorBufferInfo[j];
+        }
+
+        // Submit all 9 writes in one call. vkUpdateDescriptorSets is a host (CPU) side operation, therefore
+        // no command buffer is involved and no GPU work
+        vkUpdateDescriptorSets(m_VulkanContext.VulkanDevice, 9, WriteDescriptorSets, 0, nullptr);
+    }
+
+    return true;
 }
 
 AllocatedVkBuffer VulkanManager::CreateBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage,
@@ -1163,7 +1283,7 @@ void VulkanManager::GPUCopyBuffer(VkBuffer SrcBuffer, VkBuffer DstBuffer, VkDevi
 }
 
 // This function creates a device-local buffer with initial data in it
-// We can use such buffers for user staging(fancy way to say preping some data for later use by the GPU I guess)
+// We can use such buffers for user staging  (fancy way to say preping some data for later use by the GPU I guess)
 AllocatedVkBuffer VulkanManager::CreateBufferWithData(const void* Data, VkDeviceSize Size, VkBufferUsageFlags Usage)
 {
     // Create a staging buffer with CPU write
