@@ -25,8 +25,16 @@ HardwareRenderer::~HardwareRenderer() {
 
 bool HardwareRenderer::Initialize()
 {
-
-    return true;
+    bool Result = false;
+    m_VulkanManager = std::make_unique<VulkanManager>();
+    Result = m_VulkanManager->Initialize();
+    if (!Result)
+    {
+        std::cerr << "Failed to initialize the Vulkan manager." << std::endl;
+        return Result;
+    }
+    m_VulkanContextPtr = m_VulkanManager->GetVulkanContext();
+    return Result;
 }
 
 

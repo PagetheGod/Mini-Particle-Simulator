@@ -15,14 +15,31 @@ struct Constants
 
 // Inputs to the vertex shader, both per vertex and per instance data
 // Per instance because we are using instance rendering for the particles
+/*
+ * We changed to using a per particle SoA storage buffers to improve cache locality
+ * 8 storage buffers bound to a single set, one StructuredBuffer<float> per particle attribute
+ * The order must match the descriptor set layout binding numbers
+ * 0 = Px, 1 = Py, 2 = Pz, 3 = R, 4 = G, 5 = B, 6 = Size, 7 = LifeTime, 8 = MaxLifeTime
+ * All 9 buffers are read only in the shader, so no need for RWStructuredBuffer
+ */
+
+// Syntax means binding(slot, set)
+[[vk::binding(0, 0)]] StructuredBuffer<float> Px;
+[[vk::binding(1, 0)]] StructuredBuffer<float> Py;
+[[vk::binding(2, 0)]] StructuredBuffer<float> Pz;
+[[vk::binding(3, 0)]] StructuredBuffer<float> R;
+[[vk::binding(4, 0)]] StructuredBuffer<float> G;
+[[vk::binding(5, 0)]] StructuredBuffer<float> B;
+[[vk::binding(6, 0)]] StructuredBuffer<float> Size;
+[[vk::binding(7, 0)]] StructuredBuffer<float> LifeTime;
+[[vk::binding(8, 0)]] StructuredBuffer<float> MaxLifeTime;
+
 struct VertexInput
 {
     // The n in position[n] is there so we can have multiple members with the same semantic
     // It helps the shader compiler to distinguish between members with the same semantic but different types or purposes
+    // Right now we only have a vertex positions, since we moved the per-instance data to the structured buffers above
     [[vk::location(0)]] float2 Position : POSITION0; // Particle billboard vertex position [-1, 1]
-    [[vk::location(1)]] float3 InstancePos : POSITION1; // Particle center (world XY)
-    [[vk::location(2)]] float4 InstanceColor : COLOR0; // Particle color (RGBA)
-    [[vk::location(3)]] float InstanceSize : PSIZE; // Particle radius
 };
 
 // Outputs from the vertex shader. This is what gets passed to the fragment/pixel shader
@@ -33,14 +50,28 @@ struct VertexOutput
     [[vk::location(1)]] float2 FragmentTexCoord : TEXCOORD0; // UV coordinates for texture sampling
 };
 
+/*
+ * Instance ID refers to, well the id for the particular instance of the particle, it's supplied by Vulkan when we call
+ * vkCmdDraw(CommandBuffer, VertexCount(6), InstanceCount(num particles)). We then use the instance ID to fetch the
+ * instance-specific data from the structured buffers
+ */
 
-VertexOutput main(VertexInput Input)
+VertexOutput main(VertexInput Input, uint InstanceID : SV_InstanceID)
 {
     VertexOutput Output;
+    /*
+     * We now have to first fetch the instance-specific data from the structured buffers, including positions, colors, and size
+     */
+    float3 InstancePos = float3(Px[InstanceID], Py[InstanceID], Pz[InstanceID]);
+    float4 InstanceColor = float4(R[InstanceID], G[InstanceID], B[InstanceID], 1.f);
+    float InstanceSize = Size[InstanceID];
+    float InstanceLifeTime = LifeTime[InstanceID];
+    float InstanceMaxLifeTime = MaxLifeTime[InstanceID];
+    float InstanceAlpha = InstanceLifeTime / InstanceMaxLifeTime; // Lifetime based linear fades, can be removed
     
     // Calculate the world position of all particle vertices using camera right and up vectors
     // So we get a billboard that always faces the camera
-    float4 WorldPos = float4(Input.InstancePos, 1.f);
+    float4 WorldPos = float4(InstancePos, 1.f);
     // Multiply the camera right by position x has the effect of moving the vertex left or right
     /*
      * Basically,

@@ -247,10 +247,11 @@ private:
 	bool CleanUpContext();
 
 	//Cleanups
-	void DestoryOffscreenTarget();
+	void DestroyOffscreenTarget();
 	void DestorySwapChain();
 	void DestoryCommandPool();
 	void DestorySyncObjects();
+	void DestroyParticleInstanceBuffers();
 
 	// Helpers
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice Device, VkSurfaceKHR Surface);
@@ -260,8 +261,7 @@ private:
 	bool ReadCompiledShader(const std::string &ShaderBinaryPath, std::vector<char>& OutShaderBuffer);
 	bool CreateShaderModule(const std::vector<char>& InShaderBuffer, VkShaderModule& OutShaderModule);
 
-    void RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t ImageIndex, uint32_t InstanceCount,
-                                  VkBuffer VertexBuffer,VkBuffer InstanceBuffer,
+    void RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t CurrentFrame,uint32_t ImageIndex, uint32_t InstanceCount,VkBuffer VertexBuffer,
                                   const PushConstantType &PushConstantData, const Commons::Layout::ViewportRect& Viewport);
 
 private:

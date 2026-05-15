@@ -14,6 +14,7 @@
 
 #include "imgui_impl_vulkan.h"
 
+using namespace Commons;
 VulkanManager::VulkanManager(){
 }
 
@@ -22,14 +23,93 @@ VulkanManager::~VulkanManager() {
 
 bool VulkanManager::Initialize()
 {
+    // Vulkan initialization chain, fucking ridiculous
     bool Result = false;
+    // Instance has to be created first
     Result = CreateInstance();
     if (!Result)
     {
-        std::cerr << "CreateInstance failed: " << '\n';
+        std::cerr << "CreateInstance failed!" << '\n';
         return Result;
     }
+    // Set up debug messenger if we enabling debug layer
+    if (ENABLE_VALIDATION_LAYERS)
+    {
+        Result = SetupDebugMessenger();
+        if (!Result)
+        {
+            std::cerr << "SetupDebugMessenger failed!" << '\n';
+            return Result;
+        }
+    }
+    // Create the surface
+    Result = CreateSurface();
+    if (!Result)
+    {
 
+        std::cerr << "CreateSurface failed!" << '\n';
+        return Result;
+    }
+    // Select our physical device(GPU)
+    Result = PickPhysicalDevice();
+    if (!Result)
+    {
+        std::cerr << "PickPhysicalDevice failed!" << '\n';
+        return Result;
+    }
+    // Create logical device and swapchain
+    Result = CreateLogicalDevice();
+    if (!Result)
+    {
+        std::cerr << "CreateLogicalDevice failed!" << '\n';
+        return Result;
+    }
+    Result = CreateSwapChain();
+    if (!Result)
+    {
+        std::cerr << "CreateSwapChain failed!" << '\n';
+        return Result;
+    }
+    // Create offscreen target (for super sampling) and all render passes
+    Result = CreateOffscreenTarget(Layout::RENDER_WIDTH, Layout::RENDER_HEIGHT);
+    if (!Result)
+    {
+        std::cerr << "CreateOffscreenTarget failed!" << '\n';
+        return Result;
+    }
+    Result = CreateOffScreenRenderPass();
+    if (!Result)
+    {
+        std::cerr << "CreateOffScreenRenderPass failed!" << '\n';
+        return Result;
+    }
+    // Create frame buffers
+    Result = CreateFrameBuffers();
+    if (!Result)
+    {
+        std::cerr << "CreateFrameBuffers failed!" << '\n';
+        return Result;
+    }
+    // Create command pool and allocate command buffers
+    Result = CreateCommandPool();
+    if (!Result)
+    {
+        std::cerr << "CreateCommandPool failed!" << '\n';
+        return Result;
+    }
+    Result = AllocateCommandBuffers();
+    if (!Result)
+    {
+        std::cerr << "AllocateCommandBuffers failed!" << '\n';
+        return Result;
+    }
+    // Create all sync objects
+    Result = CreateSyncObjects();
+    if (!Result)
+    {
+        std::cerr << "CreateSyncObjects failed!" << '\n';
+        return Result;
+    }
     return Result;
 }
 
@@ -829,36 +909,16 @@ bool VulkanManager::CreateGraphicsPipeline()
     PipelineShaderStageCreateInfos[1].pName = "main";
 
     // Set up vertex input, similar to DX11's setting up input buffer for vertex shader
-    VkVertexInputBindingDescription VertexBindingDescriptions[2] = {};
+    VkVertexInputBindingDescription VertexBindingDescriptions[1] = {};
     VertexBindingDescriptions[0].binding = 0; // Slot 0, this refers to the POSITION0 in HLSL
     VertexBindingDescriptions[0].stride = sizeof(float) * 2; // Size of the data in POSITION0, which is a float2
     VertexBindingDescriptions[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    // Instance data, binding starts at slot 1, contains instance position, color, and size = 3 + 4 + 1 = 8 floats
-    VertexBindingDescriptions[1].binding = 1;
-    VertexBindingDescriptions[1].stride = sizeof(float) * 8;
-    VertexBindingDescriptions[1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
 
-    VkVertexInputAttributeDescription AttributeDescriptions[4] = {};
+    VkVertexInputAttributeDescription AttributeDescriptions[1] = {};
     AttributeDescriptions[0].location = 0;
     AttributeDescriptions[0].binding = 0;
     AttributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT; // Vertex position, again, just two floats
     AttributeDescriptions[0].offset = 0;
-    // Instance data
-    // Instance position
-    AttributeDescriptions[1].location = 1;
-    AttributeDescriptions[1].binding = 1;
-    AttributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // Instance position, the center of the particle quad
-    AttributeDescriptions[1].offset = 0; // We are the first at OUR BINDING slot, no offset needed
-    // Instance color
-    AttributeDescriptions[2].location = 2;
-    AttributeDescriptions[2].binding = 1;
-    AttributeDescriptions[2].format = VK_FORMAT_R32G32B32A32_SFLOAT; // Instance color, four floats
-    AttributeDescriptions[2].offset = sizeof(float) * 3; // Jump over the instance position float3
-    // Instance size
-    AttributeDescriptions[3].location = 3;
-    AttributeDescriptions[3].binding = 1;
-    AttributeDescriptions[3].format = VK_FORMAT_R32_SFLOAT;
-    AttributeDescriptions[3].offset = sizeof(float) * 7; // Jump over a float3 and a float4
 
     VkPipelineVertexInputStateCreateInfo VertexInputStateCreateInfo = {};
     VertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -927,6 +987,8 @@ bool VulkanManager::CreateGraphicsPipeline()
     PipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     PipelineLayoutCreateInfo.pushConstantRangeCount = 1;
     PipelineLayoutCreateInfo.pPushConstantRanges = &PushConstantRange;
+    PipelineLayoutCreateInfo.setLayoutCount = 1;
+    PipelineLayoutCreateInfo.pSetLayouts = &m_VulkanContext.ParticleInstanceDescriptorSetLayout;
 
     if (vkCreatePipelineLayout(m_VulkanContext.VulkanDevice, &PipelineLayoutCreateInfo, nullptr,
         &m_VulkanContext.GraphicsPipelineLayout) != VK_SUCCESS)
@@ -991,7 +1053,7 @@ bool VulkanManager::AllocateCommandBuffers()
      * such as D3D11Device and D3D11DeviceContext
      * DX12 and Vulkan requires us to be explicit and submit every command ourself
      */
-    m_VulkanContext.CommandBuffers.resize(VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT);
+    m_VulkanContext.CommandBuffers.resize(VulkanContext::MAX_FRAMES_IN_FLIGHT);
     VkCommandBufferAllocateInfo CommandBufferAllocateInfo = {};
     CommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     CommandBufferAllocateInfo.commandPool = m_VulkanContext.CommandPool;
@@ -1329,9 +1391,9 @@ void VulkanManager::DestroyBuffer(AllocatedVkBuffer& VulkanBuffer)
 
 bool VulkanManager::CreateSyncObjects() {
     // These are similar to mutexes we learned in class
-    m_VulkanContext.ImageAvailableSemaphores.resize(VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT);
-    m_VulkanContext.RenderFinishedSemaphores.resize(VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT);
-    m_VulkanContext.InFlightFence.resize(VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT);
+    m_VulkanContext.ImageAvailableSemaphores.resize(VulkanContext::MAX_FRAMES_IN_FLIGHT);
+    m_VulkanContext.RenderFinishedSemaphores.resize(VulkanContext::MAX_FRAMES_IN_FLIGHT);
+    m_VulkanContext.InFlightFence.resize(VulkanContext::MAX_FRAMES_IN_FLIGHT);
 
     VkSemaphoreCreateInfo SemaphoreCreateInfo = {};
     SemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1341,7 +1403,7 @@ bool VulkanManager::CreateSyncObjects() {
     FenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
     VkResult Result;
-    for (uint32_t i = 0; i < VulkanManager::VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
+    for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
     {
         Result = vkCreateSemaphore(m_VulkanContext.VulkanDevice, &SemaphoreCreateInfo,
             nullptr, &m_VulkanContext.ImageAvailableSemaphores[i]);
@@ -1370,10 +1432,61 @@ bool VulkanManager::CreateSyncObjects() {
 
 bool VulkanManager::CleanUpContext()
 {
+    /*
+     * Clean up all vulkan objects, must be done in the following order:
+     * Sync objects -> command pool -> descriptors -> pipelines -> swapchain framebuffers ->
+     * swapchain render pass -> offscreen target (framebuffer, render pass, view, image, memory) -> swapchain -> device ->
+     * debug messenger -> surface -> instance
+     */
+    vkDeviceWaitIdle(m_VulkanContext.VulkanDevice);
+    // Sync objects
+    for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vkDestroySemaphore(m_VulkanContext.VulkanDevice, m_VulkanContext.ImageAvailableSemaphores[i], nullptr);
+        vkDestroySemaphore(m_VulkanContext.VulkanDevice, m_VulkanContext.RenderFinishedSemaphores[i], nullptr);
+        vkDestroyFence(m_VulkanContext.VulkanDevice, m_VulkanContext.InFlightFence[i], nullptr);
+    }
+
+    // Command pool
+    vkDestroyCommandPool(m_VulkanContext.VulkanDevice, m_VulkanContext.CommandPool, nullptr);
+    // Descriptors
+    if (m_VulkanContext.DescriptorPool)
+    {
+        vkDestroyDescriptorPool(m_VulkanContext.VulkanDevice, m_VulkanContext.DescriptorPool, nullptr);
+        m_VulkanContext.DescriptorPool = nullptr;
+    }
+    if (m_VulkanContext.DescriptorSetLayout)
+    {
+        vkDestroyDescriptorSetLayout(m_VulkanContext.VulkanDevice, m_VulkanContext.DescriptorSetLayout, nullptr);
+        m_VulkanContext.DescriptorSetLayout = nullptr;
+    }
+    // Pipelines
+    vkDestroyPipeline(m_VulkanContext.VulkanDevice, m_VulkanContext.GraphicsPipeline, nullptr);
+    vkDestroyPipelineLayout(m_VulkanContext.VulkanDevice, m_VulkanContext.GraphicsPipelineLayout, nullptr);
+    if (m_VulkanContext.ComputePipeline)
+    {
+        vkDestroyPipeline(m_VulkanContext.VulkanDevice, m_VulkanContext.ComputePipeline, nullptr);
+        m_VulkanContext.ComputePipeline = nullptr;
+    }
+    if (m_VulkanContext.ComputePipelineLayout)
+    {
+        vkDestroyPipelineLayout(m_VulkanContext.VulkanDevice, m_VulkanContext.ComputePipelineLayout, nullptr);
+        m_VulkanContext.ComputePipelineLayout = nullptr;
+    }
+
+    // Swapchain frame buffers
+    for (VkFramebuffer FrameBuffer: m_VulkanContext.FrameBuffers)
+    {
+        vkDestroyFramebuffer(m_VulkanContext.VulkanDevice, FrameBuffer, nullptr);
+    }
+    vkDestroyRenderPass(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChainRenderPass, nullptr);
+    // Offscreen target
+    DestroyOffscreenTarget();
+
     return false;
 }
 
-void VulkanManager::DestoryOffscreenTarget()
+void VulkanManager::DestroyOffscreenTarget()
 {
     // The clean up of the offscreen target HAS To be done in this order
     // Otherwise vulkan flips out and app goes boom
@@ -1401,6 +1514,50 @@ void VulkanManager::DestoryOffscreenTarget()
     m_VulkanContext.OffScreen = {};
 }
 
+
+void VulkanManager::DestroyParticleInstanceBuffers()
+{
+    /*
+     * Order matters here, we need to destroy the pool before the set layout
+     * because the pool references the layout indirectly
+     * And we need to destroy both this two before the device
+     */
+    for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        ParticleInstanceBuffers& BufferSet = m_VulkanContext.ParticleInstanceBufferArray[i];
+        /*
+         * Persistent mapping is implicitly released when the memory is freed
+         * so we do not have to call vkUnmapMemory explicitly
+         */
+        AllocatedVkBuffer* Buffers[9] = {
+            &BufferSet.Px, &BufferSet.Py, &BufferSet.Pz,
+            &BufferSet.R, &BufferSet.G, &BufferSet.B,
+            &BufferSet.Size, &BufferSet.LifeTime, &BufferSet.MaxLifeTime
+        };
+        // Destroy all the individual particle state buffers
+        for (AllocatedVkBuffer* Buffer : Buffers)
+        {
+            DestroyBuffer(*Buffer);
+        }
+        for (void* MappedPtr : BufferSet.MappedPtr)
+        {
+            MappedPtr = nullptr;
+        }
+        BufferSet.DescriptorSet = nullptr;
+
+        if (m_VulkanContext.ParticleInstanceDescriptorPool)
+        {
+            // Destroying the pool will free all sets allocated from it implicitly
+            vkDestroyDescriptorPool(m_VulkanContext.VulkanDevice, m_VulkanContext.ParticleInstanceDescriptorPool, nullptr);
+            m_VulkanContext.ParticleInstanceDescriptorPool = nullptr;
+        }
+        if (m_VulkanContext.ParticleInstanceDescriptorSetLayout)
+        {
+            vkDestroyDescriptorSetLayout(m_VulkanContext.VulkanDevice, m_VulkanContext.ParticleInstanceDescriptorSetLayout, nullptr);
+            m_VulkanContext.ParticleInstanceDescriptorSetLayout = nullptr;
+        }
+    }
+}
 
 QueueFamilyIndices VulkanManager::FindQueueFamilies(VkPhysicalDevice Device, VkSurfaceKHR Surface)
 {
@@ -1578,9 +1735,8 @@ bool VulkanManager::CreateShaderModule(const std::vector<char>& InShaderBuffer, 
     return true;
 }
 
-void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t ImageIndex,
-    uint32_t InstanceCount, VkBuffer VertexBuffer, VkBuffer InstanceBuffer, const PushConstantType &PushConstantData,
-    const Commons::Layout::ViewportRect& Viewport)
+void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t CurrentFrame, uint32_t ImageIndex,
+    uint32_t InstanceCount, VkBuffer VertexBuffer, const PushConstantType &PushConstantData, const Commons::Layout::ViewportRect& Viewport)
 {
     using namespace Commons;
     VkCommandBufferBeginInfo CommandBufferBeginInfo = {};
@@ -1627,14 +1783,20 @@ void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint
 
     vkCmdSetScissor(CommandBuffer, 0, 1, &VkScissor);
     vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_VulkanContext.GraphicsPipeline);
-
+    /*
+     * Bind the SoA descriptor set for this frame, so the 9 stroage buffers become visible to the vertex shader
+     * We use [CurrentFrame] because each frame in flight has its own set of buffers, which allows CPU to write
+     * to the next frame's slot while the GPU is reading the current one
+     */
+    vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_VulkanContext.GraphicsPipelineLayout,
+        0, 1, &m_VulkanContext.ParticleInstanceBufferArray[CurrentFrame].DescriptorSet,
+        0, nullptr);
     vkCmdPushConstants(CommandBuffer, m_VulkanContext.GraphicsPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0,
         sizeof(PushConstantType), &PushConstantData);
 
-    VkBuffer VertexInstanceBuffers[] = {VertexBuffer, InstanceBuffer};
-    VkDeviceSize Offsets[] = {0, 0};
-    vkCmdBindVertexBuffers(CommandBuffer, 0, 2, &VertexBuffer, Offsets);
-    // At this point you might tempting to add an index buffer
+    VkBuffer VertexBuffers[] = {VertexBuffer};
+    VkDeviceSize Offsets[] = {0};
+    vkCmdBindVertexBuffers(CommandBuffer, 0, 1, VertexBuffers, Offsets);
     vkCmdDraw(CommandBuffer, 6, InstanceCount, 0, 0);
 
     // At this point, we had set the offscreen target/buffer to TRANSFER_SRC_OPTIMAL
