@@ -183,7 +183,6 @@ struct ParticleStates
     AlignedArray MaxLifeTime;
 };
 
-
 class ParticleManager
 {
 public:
@@ -237,7 +236,7 @@ public:
         return m_ParticleStates.LifeTime[Index] / m_ParticleStates.MaxLifeTime[Index];
     }
 public:
-
+    friend class VulkanManager;
 private:
     // Granular particle functions that will be called by particle frame()
 

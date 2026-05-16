@@ -25,7 +25,8 @@ public:
     ~HardwareRenderer();
 
     // Actual work functions
-    bool Initialize();
+    bool Initialize(SDL_Window* InWindow);
+	void RenderFrame();
 
 
 public:
@@ -43,7 +44,7 @@ private:
 	std::unique_ptr<VulkanManager> m_VulkanManager;
 	ParticleManager* m_ParticleManager;
 	VulkanContext* m_VulkanContextPtr;
-
+	SDL_Window* m_Window;
 	// Constants
 	/*
 	 * An array that contains the six vertices of the two triangles that make up a single particle

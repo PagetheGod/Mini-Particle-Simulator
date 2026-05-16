@@ -15,25 +15,42 @@
 #include "imgui_impl_vulkan.h"
 
 HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager) : m_VulkanManager(nullptr), m_ParticleManager(InParticleManager),
-m_VulkanContextPtr(nullptr)
+m_VulkanContextPtr(nullptr), m_Window(nullptr)
 {
 
 }
 
-HardwareRenderer::~HardwareRenderer() {
+HardwareRenderer::~HardwareRenderer()
+{
+    m_VulkanContextPtr = nullptr;
+    m_ParticleManager = nullptr;
 }
 
-bool HardwareRenderer::Initialize()
+bool HardwareRenderer::Initialize(SDL_Window* InWindow)
 {
     bool Result = false;
+
     m_VulkanManager = std::make_unique<VulkanManager>();
-    Result = m_VulkanManager->Initialize();
+    m_Window = InWindow;
+    Result = m_VulkanManager->Initialize(InWindow);
     if (!Result)
     {
         std::cerr << "Failed to initialize the Vulkan manager." << std::endl;
         return Result;
     }
     m_VulkanContextPtr = m_VulkanManager->GetVulkanContext();
+    ImGui_ImplVulkan_InitInfo ImGuiVkInitInfo{};
+    ImGuiVkInitInfo.Device = m_VulkanContextPtr->VulkanDevice;
+    ImGuiVkInitInfo.Instance = m_VulkanContextPtr->VulkanInstance;
+    ImGuiVkInitInfo.PhysicalDevice = m_VulkanContextPtr->VulkanPhysicalDevice;
+    ImGuiVkInitInfo.Allocator = nullptr;
+    ImGuiVkInitInfo.DescriptorPool = m_VulkanContextPtr->DescriptorPool;
+    ImGuiVkInitInfo.DescriptorPoolSize = 1;
+    ImGuiVkInitInfo.ApiVersion = VK_API_VERSION_1_4;
+    ImGuiVkInitInfo.Queue = m_VulkanContextPtr->PresentQueue;
+    ImGuiVkInitInfo.QueueFamily = m_VulkanContextPtr->PresentFamily;
+    ImGuiVkInitInfo.UseDynamicRendering = false;
+
     return Result;
 }
 
@@ -54,8 +71,8 @@ void HardwareRenderer::UploadParticleData(uint32_t CurrentFrame, const ParticleS
         InParticleStates.Py.get(),
         InParticleStates.Pz.get(),
         InParticleStates.R.get(),
-        InParticleStates.B.get(),
         InParticleStates.G.get(),
+        InParticleStates.B.get(),
         InParticleStates.Size.get(),
         InParticleStates.LifeTime.get(),
         InParticleStates.MaxLifeTime.get()

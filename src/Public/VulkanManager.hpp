@@ -188,13 +188,10 @@ public:
     ~VulkanManager();
 
     // Actual work functions
-    bool Initialize();
-
+    bool Initialize(SDL_Window* InWindow);
+	void DrawFrame(uint32_t CurrentFrame, uint32_t InstanceCount);
 
 public:
-
-
-
 	// Setters and getters
 	[[nodiscard]] VulkanContext* GetVulkanContext()
 	{
@@ -242,9 +239,8 @@ private:
 	void GPUCopyBuffer(VkBuffer SrcBuffer, VkBuffer DstBuffer, VkDeviceSize Size);
 	AllocatedVkBuffer CreateBufferWithData(const void* Data, VkDeviceSize Size, VkBufferUsageFlags Usage);
 	void DestroyBuffer(AllocatedVkBuffer& VulkanBuffer);
-
 	bool CreateSyncObjects();
-	bool CleanUpContext();
+	void CleanUpContext();
 
 	//Cleanups
 	void DestroyOffscreenTarget();
@@ -261,7 +257,7 @@ private:
 	bool ReadCompiledShader(const std::string &ShaderBinaryPath, std::vector<char>& OutShaderBuffer);
 	bool CreateShaderModule(const std::vector<char>& InShaderBuffer, VkShaderModule& OutShaderModule);
 
-    void RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t CurrentFrame,uint32_t ImageIndex, uint32_t InstanceCount,VkBuffer VertexBuffer,
+    void RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t CurrentFrame, uint32_t ImageIndex, uint32_t InstanceCount, VkBuffer VertexBuffer,
                                   const PushConstantType &PushConstantData, const Commons::Layout::ViewportRect& Viewport);
 
 private:

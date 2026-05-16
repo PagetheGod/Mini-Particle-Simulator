@@ -58,12 +58,13 @@ private:
     std::unique_ptr<ParticleManager> m_ParticleManager;
     InputManager m_InputManager; // Actual instance not a ptr because it's small
     Camera2D* m_Camera2D; // Raw ptr because we do not own it
+
     // States
     bool m_Paused = true;
     bool m_ShouldLoop = true;
     float m_PlaybackLeft = 0.f;
     bool m_IsConfigDirty = false;
-    // This commit persists through the entire lifetime of the app
+    // This config persists through the entire lifetime of the app
     // So we can easily check
     ParticleSimulatorConfig m_ParticleConfig;
     // Constants

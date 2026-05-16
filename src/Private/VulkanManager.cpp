@@ -13,18 +13,20 @@
 #include "VulkanManager.hpp"
 
 #include "imgui_impl_vulkan.h"
+#include "ParticleManager.hpp"
 
 using namespace Commons;
-VulkanManager::VulkanManager(){
-}
+VulkanManager::VulkanManager()= default;
 
 VulkanManager::~VulkanManager() {
+    CleanUpContext();
 }
 
-bool VulkanManager::Initialize()
+bool VulkanManager::Initialize(SDL_Window* InWindow)
 {
     // Vulkan initialization chain, fucking ridiculous
     bool Result = false;
+    m_VulkanContext.Window = InWindow;
     // Instance has to be created first
     Result = CreateInstance();
     if (!Result)
@@ -32,7 +34,7 @@ bool VulkanManager::Initialize()
         std::cerr << "CreateInstance failed!" << '\n';
         return Result;
     }
-    // Set up debug messenger if we enabling debug layer
+    // Set up debug messenger if we are enabling debug layer
     if (ENABLE_VALIDATION_LAYERS)
     {
         Result = SetupDebugMessenger();
@@ -46,7 +48,6 @@ bool VulkanManager::Initialize()
     Result = CreateSurface();
     if (!Result)
     {
-
         std::cerr << "CreateSurface failed!" << '\n';
         return Result;
     }
@@ -103,6 +104,42 @@ bool VulkanManager::Initialize()
         std::cerr << "AllocateCommandBuffers failed!" << '\n';
         return Result;
     }
+    // Swapchain render pass
+    Result = CreateSwapChainRenderPass();
+    if (!Result)
+    {
+        std::cerr << "CreateSwapChainRenderPass failed!" << '\n';
+        return Result;
+    }
+    // Particle Descriptor Layout
+    Result = CreateParticleDescriptorLayout();
+    if (!Result)
+    {
+        std::cerr << "CreateParticleDescriptorLayout failed!" << '\n';
+        return Result;
+    }
+    // Create graphics pipeline
+    Result = CreateGraphicsPipeline();
+    if (!Result)
+    {
+        std::cerr << "CreateGraphicsPipeline failed!" << '\n';
+        return Result;
+    }
+    // Particle instance buffers
+    Result = CreateParticleInstanceBuffers(ParticleManager::NUM_MAX_PARTICLES);
+    if (!Result)
+    {
+        std::cerr << "CreateParticleInstanceBuffers failed!" << '\n';
+        return Result;
+    }
+    // Particle descriptor pools and sets
+    Result = CreateParticleDescriptorPoolsAndSets();
+    if (!Result)
+    {
+        std::cerr << "CreateParticleDescriptorPoolsAndSets failed!" << '\n';
+        return Result;
+    }
+
     // Create all sync objects
     Result = CreateSyncObjects();
     if (!Result)
@@ -113,6 +150,11 @@ bool VulkanManager::Initialize()
     return Result;
 }
 
+void VulkanManager::DrawFrame(uint32_t CurrentFrame, uint32_t InstanceCount)
+{
+    RecordFrameCommandBuffer(m_VulkanContext.CommandBuffers[CurrentFrame], CurrentFrame, , InstanceCount,
+        );
+}
 
 
 bool VulkanManager::CreateInstance()
@@ -1120,6 +1162,7 @@ bool VulkanManager::CreateParticleInstanceBuffers(uint32_t NumMaxParticles)
             }
         }
     }
+    return true;
 }
 
 
@@ -1430,7 +1473,7 @@ bool VulkanManager::CreateSyncObjects() {
     return true;
 }
 
-bool VulkanManager::CleanUpContext()
+void VulkanManager::CleanUpContext()
 {
     /*
      * Clean up all vulkan objects, must be done in the following order:
@@ -1449,6 +1492,10 @@ bool VulkanManager::CleanUpContext()
 
     // Command pool
     vkDestroyCommandPool(m_VulkanContext.VulkanDevice, m_VulkanContext.CommandPool, nullptr);
+    // Particle buffers and descriptors
+    DestroyParticleInstanceBuffers();
+    vkDestroyDescriptorPool(m_VulkanContext.VulkanDevice, m_VulkanContext.ParticleInstanceDescriptorPool, nullptr);
+    vkDestroyDescriptorSetLayout(m_VulkanContext.VulkanDevice, m_VulkanContext.ParticleInstanceDescriptorSetLayout, nullptr);
     // Descriptors
     if (m_VulkanContext.DescriptorPool)
     {
@@ -1482,8 +1529,26 @@ bool VulkanManager::CleanUpContext()
     vkDestroyRenderPass(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChainRenderPass, nullptr);
     // Offscreen target
     DestroyOffscreenTarget();
-
-    return false;
+    // Swapchain image view and swapchain
+    for (VkImageView ImageView : m_VulkanContext.SwapChainImageViews)
+    {
+        vkDestroyImageView(m_VulkanContext.VulkanDevice, ImageView, nullptr);
+    }
+    vkDestroySwapchainKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, nullptr);
+    // Logical device
+    vkDestroyDevice(m_VulkanContext.VulkanDevice, nullptr);
+    // Debug layer if present
+    if (ENABLE_VALIDATION_LAYERS && m_VulkanContext.VulkanDebugMessenger)
+    {
+        auto Func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_VulkanContext.VulkanInstance, "vkDestroyDebugUtilsMessengerEXT");
+        if (Func)
+        {
+            Func(m_VulkanContext.VulkanInstance, m_VulkanContext.VulkanDebugMessenger, nullptr);
+        }
+    }
+    // Surface and vulkan instance
+    vkDestroySurfaceKHR(m_VulkanContext.VulkanInstance, m_VulkanContext.VulkanSurface, nullptr);
+    vkDestroyInstance(m_VulkanContext.VulkanInstance, nullptr);
 }
 
 void VulkanManager::DestroyOffscreenTarget()

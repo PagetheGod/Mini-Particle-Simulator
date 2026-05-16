@@ -77,14 +77,28 @@ bool Application::Initialize() {
 	// Construct the particle manager
 	m_ParticleManager = std::make_unique<ParticleManager>();
 
-	// Init the software renderer
-	m_SoftwareRenderer = std::make_unique<SoftwareRenderer>(m_ParticleManager.get());
-	Result = m_SoftwareRenderer->Initialize(m_Window);
-	if (!Result)
+	// Init the renderer of the user's choice
+	if (m_RendererType == RendererType::Software)
 	{
-		std::cerr << "Failed to initialize software renderer!" << std::endl;
-		return Result;
+		m_SoftwareRenderer = std::make_unique<SoftwareRenderer>(m_ParticleManager.get());
+		Result = m_SoftwareRenderer->Initialize(m_Window);
+		if (!Result)
+		{
+			std::cerr << "Failed to initialize software renderer!" << std::endl;
+			return Result;
+		}
 	}
+	else
+	{
+		m_HardwareRenderer = std::make_unique<HardwareRenderer>(m_ParticleManager.get());
+		Result = m_HardwareRenderer->Initialize(m_Window);
+		if (!Result)
+		{
+			std::cerr << "Failed to initialize hardware renderer!" << std::endl;
+			return Result;
+		}
+	}
+
 	// Set the camera ptr because we need it to do camera movements
 	m_Camera2D = m_SoftwareRenderer->GetCamera();
 	// Do the initialization of particle manager last because it requires lots of allocations
