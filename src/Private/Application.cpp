@@ -77,6 +77,8 @@ bool Application::Initialize() {
 	// Construct the particle manager
 	m_ParticleManager = std::make_unique<ParticleManager>();
 
+	// Create imgui context regardless of which renderer we choose
+	ImGui::CreateContext();
 	// Init the renderer of the user's choice
 	if (m_RendererType == RendererType::Software)
 	{

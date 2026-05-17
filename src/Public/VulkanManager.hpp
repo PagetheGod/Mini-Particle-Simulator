@@ -123,6 +123,7 @@ struct VulkanContext
 	VkSwapchainKHR SwapChain = nullptr;
 	VkFormat SwapChainFormat = VK_FORMAT_UNDEFINED;// Same stuffs as the DX11 formats(DXGI_FORMAT_XXX)
 	VkExtent2D SwapChainExtent = { 0, 0 };
+	uint32_t MinImageCount = 0;
 	std::vector<VkImage> SwapChainImages;
 	std::vector<VkImageView> SwapChainImageViews;// Yes it's view, does what it says
 

@@ -43,8 +43,9 @@ private:
     // This function creates a temporary SDL_Renderer, runs a mini event
     // loop with ImGui, and cleans up before returning.
     bool ShowStartupDialog();
-
-
+    // Adjust all the fonts and paddings and such, moved from SoftwareRenderer to here
+    // Because hardware renderer needs the same adjustments as well
+    void SetUIScale();
     // Get delta time
     float GetDeltaTime(uint64_t& LastNs);
     // Calculate delta time, FPS, and frame time each frame

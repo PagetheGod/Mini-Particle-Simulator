@@ -576,7 +576,8 @@ bool VulkanManager::CreateSwapChain()
         Extent.width = std::clamp(Extent.width, Capabilities.minImageExtent.width, Capabilities.maxImageExtent.width);
         Extent.height = std::clamp(Extent.height, Capabilities.minImageExtent.height, Capabilities.maxImageExtent.height);
     }
-
+    // Keep track of the min image count so we can pass it to imgui init vulkan later
+    uint32_t MinImageCount = Capabilities.minImageCount;
     uint32_t ImageCount = Capabilities.minImageCount + 1;
     if (Capabilities.maxImageCount > 0 && ImageCount > Capabilities.maxImageCount)
     {

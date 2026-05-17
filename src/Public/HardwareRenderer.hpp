@@ -45,6 +45,7 @@ private:
 	ParticleManager* m_ParticleManager;
 	VulkanContext* m_VulkanContextPtr;
 	SDL_Window* m_Window;
+	VThreadPool* m_VThreadPool;
 	// Constants
 	/*
 	 * An array that contains the six vertices of the two triangles that make up a single particle

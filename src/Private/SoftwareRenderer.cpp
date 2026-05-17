@@ -30,7 +30,6 @@ SoftwareRenderer::~SoftwareRenderer()
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
-
     if (m_ParticleTexture)
     {
         SDL_DestroyTexture(m_ParticleTexture);
@@ -87,9 +86,8 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     // Initialize ImGui. We are not setting the IniFileName to nullptr because in this case
     // we do want to save the layout state since this is a persistent ui
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
     ImGuiIO& ImGuiIO = ImGui::GetIO();
-    ImGuiIO.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; //Enable full keyboard inputs(enter, tab, space, etc)
+    ImGuiIO.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable full keyboard inputs(enter, tab, space, etc)
 
     ImGui::StyleColorsDark();
 

@@ -12,6 +12,7 @@
 // Own headers
 #include "HardwareRenderer.hpp"
 
+#include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 
 HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager) : m_VulkanManager(nullptr), m_ParticleManager(InParticleManager),
@@ -22,6 +23,12 @@ m_VulkanContextPtr(nullptr), m_Window(nullptr)
 
 HardwareRenderer::~HardwareRenderer()
 {
+    // The vulkan device might still be in use here
+    vkDeviceWaitIdle(m_VulkanContextPtr->VulkanDevice);
+    // Destroy in reversed order
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
     m_VulkanContextPtr = nullptr;
     m_ParticleManager = nullptr;
 }
@@ -44,13 +51,20 @@ bool HardwareRenderer::Initialize(SDL_Window* InWindow)
     ImGuiVkInitInfo.Instance = m_VulkanContextPtr->VulkanInstance;
     ImGuiVkInitInfo.PhysicalDevice = m_VulkanContextPtr->VulkanPhysicalDevice;
     ImGuiVkInitInfo.Allocator = nullptr;
-    ImGuiVkInitInfo.DescriptorPool = m_VulkanContextPtr->DescriptorPool;
-    ImGuiVkInitInfo.DescriptorPoolSize = 1;
+    ImGuiVkInitInfo.DescriptorPool = nullptr;
+    ImGuiVkInitInfo.DescriptorPoolSize = 16;
     ImGuiVkInitInfo.ApiVersion = VK_API_VERSION_1_4;
-    ImGuiVkInitInfo.Queue = m_VulkanContextPtr->PresentQueue;
-    ImGuiVkInitInfo.QueueFamily = m_VulkanContextPtr->PresentFamily;
+    ImGuiVkInitInfo.Queue = m_VulkanContextPtr->GraphicsQueue;
+    ImGuiVkInitInfo.QueueFamily = m_VulkanContextPtr->GraphicsFamily;
+    ImGuiVkInitInfo.MinImageCount = m_VulkanContextPtr->MinImageCount;
+    ImGuiVkInitInfo.ImageCount = static_cast<uint32_t>(m_VulkanContextPtr->SwapChainImages.size());
+    ImGuiVkInitInfo.PipelineInfoMain.RenderPass = m_VulkanContextPtr->SwapChainRenderPass;// Not the offscreen particle pass
+    ImGuiVkInitInfo.PipelineInfoMain.Subpass = 0;
+    ImGuiVkInitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     ImGuiVkInitInfo.UseDynamicRendering = false;
 
+    ImGui_ImplSDL3_InitForVulkan(m_Window);
+    ImGui_ImplVulkan_Init(&ImGuiVkInitInfo);
     return Result;
 }
 
