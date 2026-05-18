@@ -13,6 +13,7 @@
 * 3. Initialize thread pool, fill the particle object pool
 */
 
+class Camera;
 class ParticleManager;
 class HardwareRenderer;
 class UIManager;
@@ -45,7 +46,7 @@ private:
     bool ShowStartupDialog();
     // Adjust all the fonts and paddings and such, moved from SoftwareRenderer to here
     // Because hardware renderer needs the same adjustments as well
-    void SetUIScale();
+    void SetUIandFontScale();
     // Get delta time
     float GetDeltaTime(uint64_t& LastNs);
     // Calculate delta time, FPS, and frame time each frame
@@ -59,6 +60,7 @@ private:
     std::unique_ptr<ParticleManager> m_ParticleManager;
     InputManager m_InputManager; // Actual instance not a ptr because it's small
     Camera2D* m_Camera2D; // Raw ptr because we do not own it
+    Camera* m_Camera;
 
     // States
     bool m_Paused = true;

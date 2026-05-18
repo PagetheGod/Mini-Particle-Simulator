@@ -569,7 +569,9 @@ bool VulkanManager::CreateSwapChain()
     if (Extent.width == std::numeric_limits<uint32_t>::max())
     {
         int Width, Height;
-        SDL_GetWindowSize(m_VulkanContext.Window, &Width, &Height);
+        // SDL_GetWindowSizeInPixels() takes care of high DPI display, does similar job to the
+        // SDL_SetRenderLogicalPresentation() call in software renderer
+        SDL_GetWindowSizeInPixels(m_VulkanContext.Window, &Width, &Height);
         Extent.width = static_cast<uint32_t>(Width);
         Extent.height = static_cast<uint32_t>(Height);
         //Clamp the width and height

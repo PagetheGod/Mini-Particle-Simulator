@@ -193,6 +193,7 @@ public:
 	void DrawFrame(uint32_t CurrentFrame, uint32_t InstanceCount);
 
 public:
+	friend class HardwareRenderer;
 	// Setters and getters
 	[[nodiscard]] VulkanContext* GetVulkanContext()
 	{
@@ -245,9 +246,6 @@ private:
 
 	//Cleanups
 	void DestroyOffscreenTarget();
-	void DestorySwapChain();
-	void DestoryCommandPool();
-	void DestorySyncObjects();
 	void DestroyParticleInstanceBuffers();
 
 	// Helpers

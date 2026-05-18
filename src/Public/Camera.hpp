@@ -4,6 +4,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include "Commons.hpp"
+#include "InputManager.hpp"
 
 /*
  * This class encapsulates some simple camera behaviors(orbitting, etc)
@@ -19,6 +20,7 @@ public:
     ~Camera() = default;
 
     // Actual work functions
+    void Orbit(const InputResult& Input);
     void OrbitYaw(float InDirection);
     void OrbitPitch(float InDirection);
     void AdjustCameraForResize(const Commons::Layout::ViewportRect& OldViewport,
@@ -34,7 +36,7 @@ public:
         m_OrbitRadius = InOrbitRadius;
         SetPosition(glm::vec3(0.f, 0.f, -m_OrbitRadius));
     }
-    void SetRotationSpeed(const float InRotationSpeed) { m_RotationSpeed = InRotationSpeed; }
+    void SetRotationSpeed(const float InRotationSpeed) { m_RotationSpeedFactor = InRotationSpeed; }
 
     [[nodiscard]] glm::vec3 GetPosition() const { return m_Position; }
     [[nodiscard]] glm::vec3 GetUp() const { return m_Up; }
@@ -53,7 +55,7 @@ private:
     glm::vec3 m_CurrentLookAt;
     glm::vec3 m_HorizontalAxis;
     glm::vec3 m_VerticalAxis;
-    float m_RotationSpeed = 0.f;
+    float m_RotationSpeedFactor = 0.f;
     float m_OrbitRadius = 0.f;
     float m_Yaw = 0.f;
     float m_Pitch = 0.25f; // Tilt the camera a bit upwards

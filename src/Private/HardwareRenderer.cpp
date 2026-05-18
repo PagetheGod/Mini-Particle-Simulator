@@ -3,20 +3,19 @@
 #include <SDL3/SDL_vulkan.h>
 #include <cstdio>
 #include <cstring>  // for strcmp
-#include <limits>
 #include <iostream>
 #include <format>
-#include <set>
 #include <fstream>
-
-// Own headers
-#include "HardwareRenderer.hpp"
-
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
+// Own headers
+#include "HardwareRenderer.hpp"
+#include "Camera.hpp"
 
-HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager) : m_VulkanManager(nullptr), m_ParticleManager(InParticleManager),
-m_VulkanContextPtr(nullptr), m_Window(nullptr)
+
+
+HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager) : m_VulkanManager(nullptr), m_Camera(nullptr),
+m_ParticleManager(InParticleManager), m_VulkanContextPtr(nullptr), m_Window(nullptr)
 {
 
 }
@@ -63,14 +62,29 @@ bool HardwareRenderer::Initialize(SDL_Window* InWindow)
     ImGuiVkInitInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     ImGuiVkInitInfo.UseDynamicRendering = false;
 
-    ImGui_ImplSDL3_InitForVulkan(m_Window);
-    ImGui_ImplVulkan_Init(&ImGuiVkInitInfo);
+    Result = ImGui_ImplSDL3_InitForVulkan(m_Window);
+    if (!Result)
+    {
+        std::cerr << "HardwareManager: ImGui_ImplSDL3_InitForVulkan() failed. Error code" << std::endl;
+        return Result;
+    }
+    Result = ImGui_ImplVulkan_Init(&ImGuiVkInitInfo);
+    if (!Result)
+    {
+        std::cerr << "HardwareManager: ImGui_ImplVulkan_Init() failed." << std::endl;
+        return Result;
+    }
     return Result;
+}
+
+void HardwareRenderer::RenderFrame()
+{
+
 }
 
 
 void HardwareRenderer::UploadParticleData(uint32_t CurrentFrame, const ParticleStates& InParticleStates,
-    uint32_t ParticleCount)
+                                          uint32_t ParticleCount)
 {
     ParticleInstanceBuffers& BufferSet = m_VulkanContextPtr->ParticleInstanceBufferArray[CurrentFrame];
 

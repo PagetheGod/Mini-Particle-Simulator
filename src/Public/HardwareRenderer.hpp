@@ -14,6 +14,8 @@
 #include "ParticleManager.hpp"
 #include "VulkanManager.hpp"
 
+class Camera;
+
 class HardwareRenderer
 {
 public:
@@ -42,6 +44,7 @@ private:
 
 private:
 	std::unique_ptr<VulkanManager> m_VulkanManager;
+	std::unique_ptr<Camera> m_Camera;
 	ParticleManager* m_ParticleManager;
 	VulkanContext* m_VulkanContextPtr;
 	SDL_Window* m_Window;

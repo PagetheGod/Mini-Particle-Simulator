@@ -9,6 +9,8 @@
 #include "SDL3/SDL_timer.h"
 //Own headers
 #include "Application.hpp"
+
+#include "Camera.hpp"
 #include "HardwareRenderer.hpp"
 #include "Commons.hpp"
 #include "ParticleManager.hpp"
@@ -16,7 +18,7 @@ using namespace Commons;
 
 Application::Application() : m_Window(nullptr), m_RendererType(RendererType::Software),
 m_SoftwareRenderer(nullptr), m_HardwareRenderer(nullptr), m_UIManager(nullptr), m_ParticleManager(nullptr),
-m_InputManager(InputManager()), m_Camera2D(nullptr)
+m_InputManager(InputManager()), m_Camera2D(nullptr), m_Camera(nullptr)
 {
 
 }
@@ -79,6 +81,8 @@ bool Application::Initialize() {
 
 	// Create imgui context regardless of which renderer we choose
 	ImGui::CreateContext();
+	// Set up the UI and font scales for both software and hardware renderer
+	SetUIandFontScale();
 	// Init the renderer of the user's choice
 	if (m_RendererType == RendererType::Software)
 	{
@@ -125,7 +129,14 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	const bool IsPanelOpen = m_UIManager->IsPanelOpen();
 
 	// BeginFrame starts the ImGui frame, must come before any widget calls
-	m_SoftwareRenderer->BeginFrame();
+	if (m_RendererType == RendererType::Software)
+	{
+		m_SoftwareRenderer->BeginFrame();
+	}
+	else
+	{
+		m_HardwareRenderer->RenderFrame();
+	}
 
 	// Handle input
 	if (Input.Event == InputEvent::ToggleViewport)
@@ -133,11 +144,28 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 		m_UIManager->TogglePanelOpen();
 		// Viewport size just changed, refresh the camera's pan bounds so we can
 		// reach the newly-revealed area (or get clamped back into the new bounds)
-		m_Camera2D->OnViewportResized(Layout::GetViewportRect(m_UIManager->IsPanelOpen()));
+		if (m_RendererType == RendererType::Software)
+		{
+			m_Camera2D->OnViewportResized(Layout::GetViewportRect(m_UIManager->IsPanelOpen()));
+		}
+		else
+		{
+			m_Camera->AdjustCameraForResize(Layout::GetViewportRect(IsPanelOpen),
+				Layout::GetViewportRect(m_UIManager->IsPanelOpen()));
+		}
+
 	}
 	if (Input.Event == InputEvent::CameraPan)
 	{
-		m_Camera2D->Pan(Input.MouseDelta.x, Input.MouseDelta.y);
+		if (m_RendererType == RendererType::Software)
+		{
+			m_Camera2D->Pan(Input.MouseDelta.x, Input.MouseDelta.y);
+		}
+		else
+		{
+			m_Camera->Orbit
+		}
+
 	}
 	if (Input.Event == InputEvent::CameraZoom)
 	{
@@ -174,7 +202,11 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	}
 
 	// EndFrame renders particles, ImGui, and presents. Always runs.
-	m_SoftwareRenderer->EndFrame(IsPanelOpen);
+	if (m_RendererType == RendererType::Software)
+	{
+		m_SoftwareRenderer->EndFrame(IsPanelOpen);
+	}
+
 
 	return true;
 }
@@ -323,6 +355,63 @@ bool Application::ShowStartupDialog()
 	SDL_DestroyRenderer(Renderer);
 	return true;
 }
+
+void Application::SetUIandFontScale()
+{
+    // Initialize ImGui. We are not setting the IniFileName to nullptr because in this case
+    // we do want to save the layout state since this is a persistent ui
+    IMGUI_CHECKVERSION();
+    ImGuiIO& ImGuiIO = ImGui::GetIO();
+    ImGuiIO.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable full keyboard inputs(enter, tab, space, etc)
+
+    ImGui::StyleColorsDark();
+
+    /* Bump padding, spacing, scrollbar width, etc. by the same 1.5x factor
+     * as the font so widgets don't look cramped around the bigger text.
+     * ImGui auto sizes content rects to fit the font, but the gaps between
+     * widgets stay at defaults unless we scale them ourselves.
+    */
+    constexpr float UIScale = 1.5f;
+    ImGui::GetStyle().ScaleAllSizes(UIScale);
+    /*
+     * SDL_GetBasePath() get the directory where the app is RAN FROM
+     * This means if we run the executable directly by double-clicking, etc
+     * Then it resolves to the path to the binary, and we can just use relative path to
+     * find the roboto font(which is much nicer to look at than the default)
+     * However, if the app is ran by make run from the root, this would resolve to the project root
+     * And we would not be able to find the Roboto font which was copied by CMake to next to the executable
+     * So in that case we fall back to the default font
+     */
+    constexpr float BaseFontSize = 16.f * UIScale;
+    const float DpiScale = SDL_GetWindowDisplayScale(m_Window);
+    const char* BasePath = SDL_GetBasePath();
+    std::string FontPath;
+    if (BasePath == nullptr)
+    {
+        FontPath = "";
+    }
+    else
+    {
+        FontPath = BasePath;
+    }
+    FontPath += "Roboto-Medium.ttf";
+    ImFont* LoadedFont = ImGuiIO.Fonts->AddFontFromFileTTF(FontPath.c_str(), BaseFontSize * DpiScale);
+    if (LoadedFont == nullptr)
+    {
+        std::cerr << "Failed to load font from '" << FontPath
+                  << "'. Falling back to ImGui default font." << std::endl;
+        ImGuiIO.Fonts->AddFontDefault();
+    }
+    /* On HiDPI (Retina) we rasterize at BaseFontSize * DpiScale, so the
+     * font texture has the extra detail, then set FontGlobalScale = 1/DpiScale
+     * so ImGui draws the texts at their base 36 units size in the logical
+     * canvas. Combined with SDL_SetRenderLogicalPresentation above, the
+     * font texture maps 1:1 to physical pixels on a 2x display, pixel-perfect
+     * crisp text without blurry upscaling.
+     */
+    ImGuiIO.FontGlobalScale = 1.f / DpiScale;
+}
+
 float Application::GetDeltaTime(uint64_t& LastNs)
 {
 	float DeltaTime = 0.f;

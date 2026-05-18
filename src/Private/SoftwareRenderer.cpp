@@ -83,62 +83,6 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
         Commons::Layout::WINDOW_WIDTH, Commons::Layout::WINDOW_HEIGHT,
         SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-    // Initialize ImGui. We are not setting the IniFileName to nullptr because in this case
-    // we do want to save the layout state since this is a persistent ui
-    IMGUI_CHECKVERSION();
-    ImGuiIO& ImGuiIO = ImGui::GetIO();
-    ImGuiIO.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable full keyboard inputs(enter, tab, space, etc)
-
-    ImGui::StyleColorsDark();
-
-    /* Bump padding, spacing, scrollbar width, etc. by the same 1.5x factor
-     * as the font so widgets don't look cramped around the bigger text.
-     * ImGui auto sizes content rects to fit the font, but the gaps between
-     * widgets stay at defaults unless we scale them ourselves.
-    */
-    constexpr float UIScale = 1.5f;
-    ImGui::GetStyle().ScaleAllSizes(UIScale);
-
-
-
-    /*
-     * SDL_GetBasePath() get the directory where the app is RAN FROM
-     * This means if we run the executable directly by double-clicking, etc
-     * Then it resolves to the path to the binary, and we can just use relative path to
-     * find the roboto font(which is much nicer to look at than the default)
-     * However, if the app is ran by make run from the root, this would resolve to the project root
-     * And we would not be able to find the Roboto font which was copied by CMake to next to the executable
-     * So in that case we fall back to the default font
-     */
-    constexpr float BaseFontSize = 16.f * UIScale;
-    const float DpiScale = SDL_GetWindowDisplayScale(m_Window);
-    const char* BasePath = SDL_GetBasePath();
-    std::string FontPath;
-    if (BasePath == nullptr)
-    {
-        FontPath = "";
-    }
-    else
-    {
-        FontPath = BasePath;
-    }
-    FontPath += "Roboto-Medium.ttf";
-    ImFont* LoadedFont = ImGuiIO.Fonts->AddFontFromFileTTF(FontPath.c_str(), BaseFontSize * DpiScale);
-    if (LoadedFont == nullptr)
-    {
-        std::cerr << "Failed to load font from '" << FontPath
-                  << "'. Falling back to ImGui default font." << std::endl;
-        ImGuiIO.Fonts->AddFontDefault();
-    }
-    /* On HiDPI (Retina) we rasterize at BaseFontSize * DpiScale, so the
-     * font texture has the extra detail, then set FontGlobalScale = 1/DpiScale
-     * so ImGui draws the texts at their base 36 units size in the logical
-     * canvas. Combined with SDL_SetRenderLogicalPresentation above, the
-     * font texture maps 1:1 to physical pixels on a 2x display, pixel-perfect
-     * crisp text without blurry upscaling.
-     */
-    ImGuiIO.FontGlobalScale = 1.f / DpiScale;
-
     // Initialize backends
     // The SDL3 platform backend handles input (mouse, keyboard, clipboard).
     // The SDLRenderer3 backend handles rendering ImGui's draw lists.

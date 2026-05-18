@@ -12,9 +12,38 @@ Camera::Camera() : m_Position(glm::vec3(0.0f, 0.0f, 0.0f)), m_Up(glm::vec3(0.0f,
 
 }
 
+void Camera::Orbit(const InputResult& Input)
+{
+    // This function just takes an InputResult struct like how camera 2D does its Pan()
+    // Then it will call Yaw and Pitch accordingly
+
+    // First get the delta angle for Yaw and Pitch, this would come in handy
+    // When we want to calculate the new Z
+    float DeltaZ = 0.f;
+    const float DeltaYaw = m_RotationSpeedFactor * Input.MouseDelta.x;
+    m_Yaw += DeltaYaw;
+    m_Yaw = glm::mod(m_Yaw, 360.f);
+    const float YawRadians = glm::radians(m_Yaw);
+    const float NewX = m_OrbitRadius * glm::cos(YawRadians);
+    const float NewZ = m_OrbitRadius * glm::sin(YawRadians);
+    m_Position = glm::vec3(NewX, m_Position.y, NewZ);
+    m_Forward = glm::normalize(glm::vec3(-NewX, 0.f, -NewZ));
+    m_Right = glm::normalize(glm::cross(m_Up, m_Forward));
+    const float DeltaPitch = m_RotationSpeedFactor * Input.MouseDelta.y;
+    // Pitch
+    m_Pitch += m_RotationSpeedFactor * Input.MouseDelta.y;
+    m_Pitch = glm::clamp(m_Pitch, -88.f, 88.f); // Gimbal lock!
+    const float PitchRadians = glm::radians(m_Pitch);
+    const float NewY = m_OrbitRadius * glm::sin(PitchRadians);
+    const float NewZ = m_OrbitRadius * glm::cos(PitchRadians);
+    m_Position = glm::vec3(m_Position.x, NewY, NewZ);
+    m_Forward = glm::normalize(glm::vec3(-m_Position.x, 0.f, -m_Position.z));
+    m_Up = glm::normalize(glm::cross(m_Forward, m_Right));
+}
+
 void Camera::OrbitYaw(const float InDirection)
 {
-    m_Yaw += m_RotationSpeed * InDirection;
+    m_Yaw += m_RotationSpeedFactor * InDirection;
     m_Yaw = glm::mod(m_Yaw, 360.f);
     const float YawRadians = glm::radians(m_Yaw);
     const float NewX = m_OrbitRadius * glm::cos(YawRadians);
@@ -26,7 +55,7 @@ void Camera::OrbitYaw(const float InDirection)
 
 void Camera::OrbitPitch(const float InDirection)
 {
-    m_Pitch += m_RotationSpeed * InDirection;
+    m_Pitch += m_RotationSpeedFactor * InDirection;
     m_Pitch = glm::clamp(m_Pitch, -88.f, 88.f); // Gimbal lock!
     const float PitchRadians = glm::radians(m_Pitch);
     const float NewY = m_OrbitRadius * glm::sin(PitchRadians);
