@@ -150,10 +150,22 @@ bool VulkanManager::Initialize(SDL_Window* InWindow)
     return Result;
 }
 
-void VulkanManager::DrawFrame(uint32_t CurrentFrame, uint32_t InstanceCount)
+void VulkanManager::DrawFrame(uint32_t InstanceCount, const AllocatedVkBuffer& InVertexBuffer,
+        const Commons::Layout::ViewportRect& Viewport)
 {
-    RecordFrameCommandBuffer(m_VulkanContext.CommandBuffers[CurrentFrame], CurrentFrame, , InstanceCount,
-        );
+    const uint32_t CurrentFrameIndex = m_VulkanContext.CurrentFrame;
+    // Needs to wait for GPU to finish its current work
+    vkWaitForFences(m_VulkanContext.VulkanDevice, 1, &m_VulkanContext.InFlightFence[CurrentFrameIndex], VK_TRUE,
+        UINT64_MAX);
+    // Get the image index
+    uint32_t ImageIndex = 0;
+    VkResult AcquireResult = vkAcquireNextImageKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, UINT64_MAX,
+        m_VulkanContext.ImageAvailableSemaphores[CurrentFrameIndex], nullptr, &ImageIndex);
+    // Acquire Result can contain an error, handle it here by potentially recreating the swapchain, TODO
+    // Reset the fence once we know we will actually submit the draw call
+    vkResetFences(m_VulkanContext.VulkanDevice, 1, &m_VulkanContext.InFlightFence[CurrentFrameIndex]);
+    RecordFrameCommandBuffer(m_VulkanContext.CommandBuffers[CurrentFrameIndex], CurrentFrameIndex, ImageIndex, InstanceCount,
+        InVertexBuffer.VulkanBuffer, Push);
 }
 
 
@@ -1420,6 +1432,7 @@ AllocatedVkBuffer VulkanManager::CreateBufferWithData(const void* Data, VkDevice
     // Use GPU to copy from the staging buffer
     GPUCopyBuffer(StagingBuffer.VulkanBuffer, DeviceLocalBuffer.VulkanBuffer, Size);
     // Free the staging buffer so it's a one time resource for this copying operation
+    DestroyBuffer(StagingBuffer);
 }
 
 // Small helper to clean up the custom AllocatedVkBuffer struct

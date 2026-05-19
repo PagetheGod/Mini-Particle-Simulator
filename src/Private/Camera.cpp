@@ -23,20 +23,21 @@ void Camera::Orbit(const InputResult& Input)
     const float DeltaYaw = m_RotationSpeedFactor * Input.MouseDelta.x;
     m_Yaw += DeltaYaw;
     m_Yaw = glm::mod(m_Yaw, 360.f);
+    const float DeltaYawRadians = glm::radians(DeltaYaw);
     const float YawRadians = glm::radians(m_Yaw);
     const float NewX = m_OrbitRadius * glm::cos(YawRadians);
-    const float NewZ = m_OrbitRadius * glm::sin(YawRadians);
-    m_Position = glm::vec3(NewX, m_Position.y, NewZ);
-    m_Forward = glm::normalize(glm::vec3(-NewX, 0.f, -NewZ));
-    m_Right = glm::normalize(glm::cross(m_Up, m_Forward));
-    const float DeltaPitch = m_RotationSpeedFactor * Input.MouseDelta.y;
+    DeltaZ += m_OrbitRadius * glm::sin(DeltaYawRadians);
     // Pitch
-    m_Pitch += m_RotationSpeedFactor * Input.MouseDelta.y;
-    m_Pitch = glm::clamp(m_Pitch, -88.f, 88.f); // Gimbal lock!
+    const float DeltaPitch = m_RotationSpeedFactor * Input.MouseDelta.y;
+    m_Pitch += DeltaPitch;
+    m_Pitch = glm::clamp(m_Pitch, -89.f, 89.f); // Gimbal lock!
+    const float DeltaPitchRadians = glm::radians(DeltaPitch);
     const float PitchRadians = glm::radians(m_Pitch);
     const float NewY = m_OrbitRadius * glm::sin(PitchRadians);
-    const float NewZ = m_OrbitRadius * glm::cos(PitchRadians);
-    m_Position = glm::vec3(m_Position.x, NewY, NewZ);
+    DeltaZ += m_OrbitRadius * glm::cos(DeltaPitchRadians);
+    // Calculate new position and three directions based on the updated pitch and yaw, and x,y,z
+    m_Position = glm::vec3(NewX, NewY, m_Position.z + DeltaZ);
+    m_Right = glm::normalize(glm::cross(m_Up, m_Forward));
     m_Forward = glm::normalize(glm::vec3(-m_Position.x, 0.f, -m_Position.z));
     m_Up = glm::normalize(glm::cross(m_Forward, m_Right));
 }

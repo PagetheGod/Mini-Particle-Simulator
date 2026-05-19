@@ -74,6 +74,14 @@ bool HardwareRenderer::Initialize(SDL_Window* InWindow)
         std::cerr << "HardwareManager: ImGui_ImplVulkan_Init() failed." << std::endl;
         return Result;
     }
+    // Create the persistent vertex buffer containing the six quad vertices
+    m_VertexBuffer = m_VulkanManager->CreateBufferWithData(QuadVertices, sizeof(QuadVertices),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    if (m_VertexBuffer.VulkanBuffer == nullptr)
+    {
+        std::cerr << "HardwareManager: Failed to create vertex buffer." << std::endl;
+        return Result;
+    }
     return Result;
 }
 

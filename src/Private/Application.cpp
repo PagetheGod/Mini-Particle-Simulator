@@ -163,7 +163,7 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 		}
 		else
 		{
-			m_Camera->Orbit
+			m_Camera->Orbit(Input);
 		}
 
 	}

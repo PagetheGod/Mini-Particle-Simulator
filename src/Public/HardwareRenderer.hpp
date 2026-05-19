@@ -49,6 +49,8 @@ private:
 	VulkanContext* m_VulkanContextPtr;
 	SDL_Window* m_Window;
 	VThreadPool* m_VThreadPool;
+	// The vertex buffer for the particles is a persistent buffer in our case, since it's just a quad
+	AllocatedVkBuffer m_VertexBuffer;
 	// Constants
 	/*
 	 * An array that contains the six vertices of the two triangles that make up a single particle
