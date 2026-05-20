@@ -34,8 +34,8 @@ struct QueueFamilyIndices
 	}
 };
 
-// Putting this here is really weird. This is an issue with the current architectural design, wtf are we tightly coupling
-// a "vulkan manager" class to use a single type of push constant? Needs to fix
+// Putting this here is really weird and a bad idea for a large project, since we are coupling a generic vulkan manager to
+// One specific set of push constants. It's ok for this project given its limited scale though
 struct PushConstantType
 {
 	glm::mat4 ViewProjection;
@@ -192,8 +192,8 @@ public:
 
     // Actual work functions
     bool Initialize(SDL_Window* InWindow);
-	void DrawFrame(uint32_t InstanceCount, const AllocatedVkBuffer& InVertexBuffer,
-		const Commons::Layout::ViewportRect& Viewport);
+	void DrawFrame(uint32_t InstanceCount, const AllocatedVkBuffer& InVertexBuffer, const PushConstantType& PushConstants,
+ const Commons::Layout::ViewportRect& Viewport);
 	friend class HardwareRenderer;
 public:
 	// Setters and getters

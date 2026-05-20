@@ -23,6 +23,7 @@ public:
     void Orbit(const InputResult& Input);
     void OrbitYaw(float InDirection);
     void OrbitPitch(float InDirection);
+    void Zoom(const InputResult& Input);
     void AdjustCameraForResize(const Commons::Layout::ViewportRect& OldViewport,
         const Commons::Layout::ViewportRect& NewViewport);
 
@@ -55,14 +56,21 @@ private:
     glm::vec3 m_CurrentLookAt;
     glm::vec3 m_HorizontalAxis;
     glm::vec3 m_VerticalAxis;
-    float m_RotationSpeedFactor = 0.f;
+    float m_RotationSpeedFactor = 15.f;
+    float m_ZoomSpeedFactor = 0.25f;
     float m_OrbitRadius = 0.f;
     float m_Yaw = 0.f;
     float m_Pitch = 0.25f; // Tilt the camera a bit upwards
-
-    // Constants
+    float m_ZoomY = 1.f;
+    float m_ZoomX = 1.f;
+    // Constants, we have different zoom limits for software and hardware renderer due to how they
+    // render the actual sprites
     static constexpr float FIELD_OF_VIEW = 90.f;
     static constexpr float NEAR_PLANE = 0.1f;
     static constexpr float FAR_PLANE = 1000.f;
+    static constexpr float MIN_ZOOM_Y = 0.8f;
+    static constexpr float MAX_ZOOM_Y = 2.5f;
+    static constexpr float MIN_ZOOM_X = MIN_ZOOM_Y / Commons::Layout::ASPECT_RATIO;
+    static constexpr float MAX_ZOOM_X = MAX_ZOOM_Y / Commons::Layout::ASPECT_RATIO;
 };
 

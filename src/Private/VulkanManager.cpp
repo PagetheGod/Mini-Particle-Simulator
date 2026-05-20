@@ -150,13 +150,10 @@ bool VulkanManager::Initialize(SDL_Window* InWindow)
     return Result;
 }
 
-void VulkanManager::DrawFrame(uint32_t InstanceCount, const AllocatedVkBuffer& InVertexBuffer,
-        const Commons::Layout::ViewportRect& Viewport)
+void VulkanManager::DrawFrame(uint32_t InstanceCount, const AllocatedVkBuffer& InVertexBuffer, const PushConstantType& PushConstants,
+const Layout::ViewportRect& Viewport)
 {
     const uint32_t CurrentFrameIndex = m_VulkanContext.CurrentFrame;
-    // Needs to wait for GPU to finish its current work
-    vkWaitForFences(m_VulkanContext.VulkanDevice, 1, &m_VulkanContext.InFlightFence[CurrentFrameIndex], VK_TRUE,
-        UINT64_MAX);
     // Get the image index
     uint32_t ImageIndex = 0;
     VkResult AcquireResult = vkAcquireNextImageKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, UINT64_MAX,
@@ -165,7 +162,31 @@ void VulkanManager::DrawFrame(uint32_t InstanceCount, const AllocatedVkBuffer& I
     // Reset the fence once we know we will actually submit the draw call
     vkResetFences(m_VulkanContext.VulkanDevice, 1, &m_VulkanContext.InFlightFence[CurrentFrameIndex]);
     RecordFrameCommandBuffer(m_VulkanContext.CommandBuffers[CurrentFrameIndex], CurrentFrameIndex, ImageIndex, InstanceCount,
-        InVertexBuffer.VulkanBuffer, Push);
+        InVertexBuffer.VulkanBuffer, PushConstants, Viewport);
+    // Submit all the commands, after waiting on an available image and signal render finish.
+    const VkPipelineStageFlags WaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo SubmitInfo{};
+    SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    SubmitInfo.waitSemaphoreCount = 1;
+    SubmitInfo.pWaitSemaphores = &m_VulkanContext.ImageAvailableSemaphores[CurrentFrameIndex];
+    SubmitInfo.pWaitDstStageMask = &WaitStage;
+    SubmitInfo.commandBufferCount = 1;
+    SubmitInfo.pCommandBuffers = &m_VulkanContext.CommandBuffers[CurrentFrameIndex];
+    SubmitInfo.signalSemaphoreCount = 1;
+    SubmitInfo.pSignalSemaphores = &m_VulkanContext.RenderFinishedSemaphores[CurrentFrameIndex];
+    vkQueueSubmit(m_VulkanContext.GraphicsQueue, 1, &SubmitInfo, m_VulkanContext.InFlightFence[CurrentFrameIndex]);
+    // Present using the current image index, which tells vulkan which image to put on screen
+    VkPresentInfoKHR PresentInfo{};
+    PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    PresentInfo.waitSemaphoreCount = 1;
+    PresentInfo.pWaitSemaphores = &m_VulkanContext.RenderFinishedSemaphores[CurrentFrameIndex];
+    PresentInfo.pImageIndices = &ImageIndex;
+    PresentInfo.swapchainCount = 1;
+    PresentInfo.pSwapchains = &m_VulkanContext.SwapChain;
+    vkQueuePresentKHR(m_VulkanContext.PresentQueue, &PresentInfo);
+    // Advance the frame counter
+    m_VulkanContext.CurrentFrame = (CurrentFrameIndex + 1) % VulkanContext::MAX_FRAMES_IN_FLIGHT;
+
 }
 
 

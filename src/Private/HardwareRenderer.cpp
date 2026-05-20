@@ -11,10 +11,11 @@
 // Own headers
 #include "HardwareRenderer.hpp"
 #include "Camera.hpp"
+#include "glm/ext/matrix_transform.hpp"
 
 
-
-HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager) : m_VulkanManager(nullptr), m_Camera(nullptr),
+using namespace Commons;
+HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager, Camera* InCamera) : m_VulkanManager(nullptr), m_Camera(InCamera),
 m_ParticleManager(InParticleManager), m_VulkanContextPtr(nullptr), m_Window(nullptr)
 {
 
@@ -23,7 +24,11 @@ m_ParticleManager(InParticleManager), m_VulkanContextPtr(nullptr), m_Window(null
 HardwareRenderer::~HardwareRenderer()
 {
     // The vulkan device might still be in use here
-    vkDeviceWaitIdle(m_VulkanContextPtr->VulkanDevice);
+    // Also there is a chance the destructor gets called after some init failures, so need to check
+    if (m_VulkanContextPtr && m_VulkanContextPtr->VulkanDevice)
+    {
+        vkDeviceWaitIdle(m_VulkanContextPtr->VulkanDevice);
+    }
     // Destroy in reversed order
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
@@ -85,9 +90,40 @@ bool HardwareRenderer::Initialize(SDL_Window* InWindow)
     return Result;
 }
 
-void HardwareRenderer::RenderFrame()
+void HardwareRenderer::BeginFrame()
 {
+    // Same thing with the software renderer, we need to start an ImGui frame no matter what
+    ImGui_ImplSDL3_NewFrame();
+    ImGui_ImplVulkan_NewFrame();
+    // Start the imgui frame
+    ImGui::NewFrame();
+}
 
+void HardwareRenderer::EndFrame(const bool IsPanelOpen)
+{
+    // First end the ImGui frame
+    ImGui::Render();
+    // Build the push constants
+    // We are not passing in the world matrix in this case, because it's default to the identity matrix
+    PushConstantType PushConstants{};
+    PushConstants.CameraRight = m_Camera->GetRight();
+    PushConstants.CameraUp = m_Camera->GetUp();
+    glm::mat4x4 ViewMatrix;
+    glm::mat4x4 ProjectionMatrix;
+    m_Camera->GetViewMatrix(ViewMatrix);
+    m_Camera->GetProjectionMatrix(ProjectionMatrix, Layout::ASPECT_RATIO);
+    const glm::mat4x4 ViewProjection = ProjectionMatrix * ViewMatrix;
+    PushConstants.ViewProjection = ViewProjection;
+    // Upload the particle data, we wait for the fence here to synchronize
+    const uint32_t CurrentFrameIndex = m_VulkanContextPtr->CurrentFrame;
+    // Needs to wait for GPU to finish its current work
+    vkWaitForFences(m_VulkanContextPtr->VulkanDevice, 1, &m_VulkanContextPtr->InFlightFence[CurrentFrameIndex], VK_TRUE,
+        UINT64_MAX);
+    UploadParticleData(m_VulkanContextPtr->CurrentFrame, *(m_ParticleManager->GetParticleStates()),
+        m_ParticleManager->GetParticleCount());
+    // Tell Vulkan manager to draw the current frame
+    m_VulkanManager->DrawFrame(m_ParticleManager->GetParticleCount(), m_VertexBuffer, PushConstants,
+        Layout::GetViewportRect(IsPanelOpen));
 }
 
 

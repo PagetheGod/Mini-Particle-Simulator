@@ -80,6 +80,9 @@ namespace Commons
         // 2560×1440 at a 1920×1080 window = ~1.78x supersampling.
         static constexpr int RENDER_WIDTH = 2560;
         static constexpr int RENDER_HEIGHT = 1440;
+        // Aspect ratio
+        static constexpr float ASPECT_RATIO = 16.f / 9.f;
+
 
         // Percentage of the window occupied by render viewport(horizontal)
         static constexpr float VIEWPORT_PORTION_WIDTH = 0.6f;

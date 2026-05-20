@@ -135,7 +135,7 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	}
 	else
 	{
-		m_HardwareRenderer->RenderFrame();
+		m_HardwareRenderer->BeginFrame();
 	}
 
 	// Handle input
@@ -169,9 +169,16 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	}
 	if (Input.Event == InputEvent::CameraZoom)
 	{
-		Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
-		m_Camera2D->ZoomAt(Input.ScrollDelta, Input.MousePosition.x, Input.MousePosition.y,
-			VpRect);
+		if (m_RendererType == RendererType::Software)
+		{
+			Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
+			m_Camera2D->ZoomAt(Input.ScrollDelta, Input.MousePosition.x, Input.MousePosition.y,
+				VpRect);
+		}
+		else
+		{
+			m_Camera->Zoom(Input);
+		}
 	}
 
 	// UI, submits ImGui widgets between NewFrame and Render
@@ -206,8 +213,10 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	{
 		m_SoftwareRenderer->EndFrame(IsPanelOpen);
 	}
-
-
+	else
+	{
+		m_HardwareRenderer->EndFrame(IsPanelOpen);
+	}
 	return true;
 }
 

@@ -4,7 +4,7 @@
 
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
-
+using namespace Commons;
 Camera::Camera() : m_Position(glm::vec3(0.0f, 0.0f, 0.0f)), m_Up(glm::vec3(0.0f, 0.0f, 0.0f)), m_Right(glm::vec3(0.0f, 0.0f, 0.0f)),
                    m_Forward(glm::vec3(0.0f, 0.0f, 0.0f)), m_OriginLookAt(glm::vec3(0.f)), m_CurrentLookAt(glm::vec3(0.f)),
                    m_HorizontalAxis(1.f, 0.f, 0.f), m_VerticalAxis(0.f, 1.f, 0.f)
@@ -66,8 +66,19 @@ void Camera::OrbitPitch(const float InDirection)
     m_Up = glm::normalize(glm::cross(m_Forward, m_Right));
 }
 
+void Camera::Zoom(const InputResult& Input)
+{
+    // First calculate how much we zoom
+    const float ZoomDelta = Input.ScrollDelta * m_ZoomSpeedFactor;
+    // Apply the zoom delta to zoom y, zoom x can then be calculated on the fly
+    m_ZoomY += ZoomDelta;
+    m_ZoomY = glm::clamp(m_ZoomY, MIN_ZOOM_Y, MAX_ZOOM_Y);
+    m_ZoomX = m_ZoomY / Layout::ASPECT_RATIO;
+    m_ZoomX = glm::clamp(m_ZoomX, MIN_ZOOM_X, MAX_ZOOM_X);
+}
+
 void Camera::AdjustCameraForResize(const Commons::Layout::ViewportRect &OldViewport,
-    const Commons::Layout::ViewportRect &NewViewport)
+                                   const Commons::Layout::ViewportRect &NewViewport)
 {
     /*
      * When our viewport changes, it expands toward the bottom and the right
@@ -133,5 +144,8 @@ void Camera::GetViewMatrix(glm::mat4 &OutViewMatrix) const
 void Camera::GetProjectionMatrix(glm::mat4 &OutProjectionMatrix, const float AspectRatio)
 {
     OutProjectionMatrix = glm::perspectiveLH_ZO(glm::radians(Camera::FIELD_OF_VIEW), AspectRatio, Camera::NEAR_PLANE, Camera::FAR_PLANE);
+    // According to math book, the projection matrix _01 should contain ZoomX and matrix _11 is zoom y?
+    OutProjectionMatrix[0][0] = m_ZoomX;
+    OutProjectionMatrix[1][1] = m_ZoomY;
 }
 
