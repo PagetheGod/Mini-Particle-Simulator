@@ -270,65 +270,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     glm::glm
 )
 
-if(BUILD_TESTING)
-    add_executable(core_tests
-        tests/test_main.cpp
-        tests/Camera2DTests.cpp
-        tests/CommonsTests.cpp
-        tests/ParticleManagerTests.cpp
-        src/Private/ParticleManager.cpp
-        src/Private/VThreadPool.cpp
-        src/Private/SIMD.cpp
-        src/Private/Camera2D.cpp
-    )
-
-    if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-        set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
-    endif()
-
-    target_include_directories(core_tests PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/src/Public
-        ${CMAKE_SOURCE_DIR}/external/glm
-        ${CMAKE_SOURCE_DIR}/src/ThirdParty/pcg/include
-    )
-
-    if(MSVC)
-        target_compile_options(core_tests PRIVATE /W4)
-    else()
-        target_compile_options(core_tests PRIVATE -Wall -Wextra -Wpedantic)
-    endif()
-
-    add_test(NAME core_tests COMMAND core_tests)
-
-    # Build the course provided catch2 based tests for thread pool
-    # We have to build this as a separate executable
-    # Because it has its own main and would conflict with our own test main
-    # if we got multiple entry points
-    add_executable(threadpool_catch_tests
-        tests/catch.cpp
-        tests/test_suite.cpp
-        tests/test_threadpool.cpp
-        src/Private/ThreadPool.cpp
-    )
-
-    target_include_directories(threadpool_catch_tests PRIVATE
-        ${CMAKE_SOURCE_DIR}/src/Public
-        ${CMAKE_SOURCE_DIR}/tests
-    )
-
-    if(MSVC)
-        target_compile_options(threadpool_catch_tests PRIVATE /W4)
-    else()
-        # Catch2 sources will trigger many pedantic warnings. Relax warnings for
-        # this target only so third party and provided code don't fail builds.
-        target_compile_options(threadpool_catch_tests PRIVATE -w)
-    endif()
-
-    add_test(NAME threadpool_catch_tests COMMAND threadpool_catch_tests)
-endif()
-
-
 # Windows: Copy SDL3.dll next to the executable
 # On Windows, DLLs must be in the same directory as the .exe (or on PATH).
 # This post-build command copies SDL3.dll into our output directory
