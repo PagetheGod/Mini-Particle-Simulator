@@ -19,19 +19,23 @@ class Camera;
 class HardwareRenderer
 {
 public:
-    HardwareRenderer(ParticleManager* InParticleManager, Camera* InCamera);
-    HardwareRenderer(const HardwareRenderer&) = delete;
-    HardwareRenderer& operator=(const HardwareRenderer&) = delete;
-    HardwareRenderer(HardwareRenderer&& ) = delete;
-    HardwareRenderer& operator=(HardwareRenderer&&) = delete;
-    ~HardwareRenderer();
+	explicit HardwareRenderer(ParticleManager* InParticleManager);
+	HardwareRenderer(const HardwareRenderer&) = delete;
+	HardwareRenderer& operator=(const HardwareRenderer&) = delete;
+	HardwareRenderer(HardwareRenderer&& ) = delete;
+	HardwareRenderer& operator=(HardwareRenderer&&) = delete;
+	~HardwareRenderer();
 
-    // Actual work functions
-    bool Initialize(SDL_Window* InWindow);
+	// Actual work functions
+	bool Initialize(SDL_Window* InWindow);
 	void BeginFrame();
 	void EndFrame(const bool IsPanelOpen);
 
-
+	// Setters and getters
+	Camera* GetCamera()
+	{
+		return m_Camera.get();
+	}
 public:
 
 private:
@@ -45,7 +49,7 @@ private:
 
 private:
 	std::unique_ptr<VulkanManager> m_VulkanManager;
-	Camera* m_Camera;
+	std::unique_ptr<Camera> m_Camera;
 	ParticleManager* m_ParticleManager;
 	VulkanContext* m_VulkanContextPtr;
 	SDL_Window* m_Window;

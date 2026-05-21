@@ -25,6 +25,10 @@ m_InputManager(InputManager()), m_Camera2D(nullptr), m_Camera(nullptr)
 
 Application::~Application()
 {
+	// Trigger the vulkan destruction logics first by calling reset()
+	// Because if we destroy the window(the surface for vulkan) before vulkan, things will explode
+	m_HardwareRenderer.reset();
+	ImGui::DestroyContext();
     SDL_DestroyWindow(m_Window);
     SDL_Quit();
 }
@@ -35,26 +39,24 @@ bool Application::Initialize() {
 	bool Result = false;
 	if (!SDL_Init(SDL_INIT_VIDEO))
 	{
-		std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
+		// Using a message box show the error, this is currently experimental, will move ALL error
+		// notifications to this later if it works
+		char ErrorMsg[128];
+		sprintf(ErrorMsg, "SDL could not initialize! SDL_Error: %s", SDL_GetError());
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", ErrorMsg, nullptr);
 		return Result;
 	}
 
 	// Set up the flags to create our window
 	// Last flag handles high-DPI displays so our drawable area matches the pixel counts
-	constexpr SDL_WindowFlags WindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-	m_Window = SDL_CreateWindow(Commons::Constants::WINDOW_TITLE, Commons::Layout::WINDOW_WIDTH, Commons::Layout::WINDOW_HEIGHT,
+	constexpr SDL_WindowFlags WindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+	m_Window = SDL_CreateWindow(Commons::Constants::WINDOW_TITLE, Layout::WINDOW_WIDTH, Layout::WINDOW_HEIGHT,
 		WindowFlags);
 	if (!m_Window)
 	{
 		std::cerr << "Could not create window! SDL_Error: " << SDL_GetError() << std::endl;
 		return Result;
 	}
-
-	// Critical for vulkan, since vulkan's swap chain cares about the real pixel counts, not window size
-	int DrawableWidth = 0;
-	int DrawableHeight = 0;
-	SDL_GetWindowSize(m_Window, &DrawableWidth, &DrawableHeight);
-
 
 	// Get the vulkan instance extensions that SDL needs for creating a surface on our platform
 	// It handles cross-platform automatically
@@ -63,7 +65,6 @@ bool Application::Initialize() {
 	if (!Extensions)
 	{
 		std::cerr << "Failed to get Vulkan extensions: " << SDL_GetError() << '\n';
-		SDL_DestroyWindow(m_Window);
 		return Result;
 	}
 	if (!ShowStartupDialog())
@@ -93,6 +94,8 @@ bool Application::Initialize() {
 			std::cerr << "Failed to initialize software renderer!" << std::endl;
 			return Result;
 		}
+		// Set the camera ptr because we need it to do camera movements
+		m_Camera2D = m_SoftwareRenderer->GetCamera();
 	}
 	else
 	{
@@ -103,10 +106,12 @@ bool Application::Initialize() {
 			std::cerr << "Failed to initialize hardware renderer!" << std::endl;
 			return Result;
 		}
+		// Critical for vulkan, since vulkan's swap chain cares about the real pixel counts, not window size
+		int DrawableWidth = 0;
+		int DrawableHeight = 0;
+		SDL_GetWindowSizeInPixels(m_Window, &DrawableWidth, &DrawableHeight);
+		m_Camera = m_HardwareRenderer->GetCamera();
 	}
-
-	// Set the camera ptr because we need it to do camera movements
-	m_Camera2D = m_SoftwareRenderer->GetCamera();
 	// Do the initialization of particle manager last because it requires lots of allocations
 	m_ParticleManager->InitializeParticles();
 	// Set play back left to max
@@ -211,11 +216,11 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	// EndFrame renders particles, ImGui, and presents. Always runs.
 	if (m_RendererType == RendererType::Software)
 	{
-		m_SoftwareRenderer->EndFrame(IsPanelOpen);
+		m_SoftwareRenderer->EndFrame(m_UIManager->IsPanelOpen());
 	}
 	else
 	{
-		m_HardwareRenderer->EndFrame(IsPanelOpen);
+		m_HardwareRenderer->EndFrame(m_UIManager->IsPanelOpen());
 	}
 	return true;
 }
@@ -362,6 +367,7 @@ bool Application::ShowStartupDialog()
 	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext();
 	SDL_DestroyRenderer(Renderer);
+	m_RendererType = ChosenType;
 	return true;
 }
 

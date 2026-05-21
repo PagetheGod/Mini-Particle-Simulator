@@ -15,7 +15,7 @@
 
 
 using namespace Commons;
-HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager, Camera* InCamera) : m_VulkanManager(nullptr), m_Camera(InCamera),
+HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager) : m_VulkanManager(nullptr), m_Camera(nullptr),
 m_ParticleManager(InParticleManager), m_VulkanContextPtr(nullptr), m_Window(nullptr)
 {
 
@@ -32,7 +32,6 @@ HardwareRenderer::~HardwareRenderer()
     // Destroy in reversed order
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
     m_VulkanContextPtr = nullptr;
     m_ParticleManager = nullptr;
 }
@@ -49,6 +48,7 @@ bool HardwareRenderer::Initialize(SDL_Window* InWindow)
         std::cerr << "Failed to initialize the Vulkan manager." << std::endl;
         return Result;
     }
+    m_Camera = std::make_unique<Camera>();
     m_VulkanContextPtr = m_VulkanManager->GetVulkanContext();
     ImGui_ImplVulkan_InitInfo ImGuiVkInitInfo{};
     ImGuiVkInitInfo.Device = m_VulkanContextPtr->VulkanDevice;
@@ -119,7 +119,7 @@ void HardwareRenderer::EndFrame(const bool IsPanelOpen)
     // Needs to wait for GPU to finish its current work
     vkWaitForFences(m_VulkanContextPtr->VulkanDevice, 1, &m_VulkanContextPtr->InFlightFence[CurrentFrameIndex], VK_TRUE,
         UINT64_MAX);
-    UploadParticleData(m_VulkanContextPtr->CurrentFrame, *(m_ParticleManager->GetParticleStates()),
+    UploadParticleData(CurrentFrameIndex, *(m_ParticleManager->GetParticleStates()),
         m_ParticleManager->GetParticleCount());
     // Tell Vulkan manager to draw the current frame
     m_VulkanManager->DrawFrame(m_ParticleManager->GetParticleCount(), m_VertexBuffer, PushConstants,

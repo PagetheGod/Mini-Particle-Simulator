@@ -5,9 +5,8 @@
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 using namespace Commons;
-Camera::Camera() : m_Position(glm::vec3(0.0f, 0.0f, 0.0f)), m_Up(glm::vec3(0.0f, 0.0f, 0.0f)), m_Right(glm::vec3(0.0f, 0.0f, 0.0f)),
-                   m_Forward(glm::vec3(0.0f, 0.0f, 0.0f)), m_OriginLookAt(glm::vec3(0.f)), m_CurrentLookAt(glm::vec3(0.f)),
-                   m_HorizontalAxis(1.f, 0.f, 0.f), m_VerticalAxis(0.f, 1.f, 0.f)
+Camera::Camera() : m_Position(glm::vec3(0.0f, 0.0f, -m_OrbitRadius)), m_Up(glm::vec3(0.0f, 1.0f, 0.0f)), m_Right(glm::vec3(1.0f, 0.0f, 0.0f)),
+                   m_Forward(glm::vec3(0.0f, 0.0f, 1.0f)), m_OriginLookAt(glm::vec3(0.f))
 {
 
 }
@@ -15,55 +14,12 @@ Camera::Camera() : m_Position(glm::vec3(0.0f, 0.0f, 0.0f)), m_Up(glm::vec3(0.0f,
 void Camera::Orbit(const InputResult& Input)
 {
     // This function just takes an InputResult struct like how camera 2D does its Pan()
-    // Then it will call Yaw and Pitch accordingly
-
-    // First get the delta angle for Yaw and Pitch, this would come in handy
-    // When we want to calculate the new Z
-    float DeltaZ = 0.f;
-    const float DeltaYaw = m_RotationSpeedFactor * Input.MouseDelta.x;
-    m_Yaw += DeltaYaw;
+    // First calculate the new yaw and pitch. We have no roll here
+    m_Yaw += m_RotationSpeedFactor * Input.MouseDelta.x;
     m_Yaw = glm::mod(m_Yaw, 360.f);
-    const float DeltaYawRadians = glm::radians(DeltaYaw);
-    const float YawRadians = glm::radians(m_Yaw);
-    const float NewX = m_OrbitRadius * glm::cos(YawRadians);
-    DeltaZ += m_OrbitRadius * glm::sin(DeltaYawRadians);
-    // Pitch
-    const float DeltaPitch = m_RotationSpeedFactor * Input.MouseDelta.y;
-    m_Pitch += DeltaPitch;
-    m_Pitch = glm::clamp(m_Pitch, -89.f, 89.f); // Gimbal lock!
-    const float DeltaPitchRadians = glm::radians(DeltaPitch);
-    const float PitchRadians = glm::radians(m_Pitch);
-    const float NewY = m_OrbitRadius * glm::sin(PitchRadians);
-    DeltaZ += m_OrbitRadius * glm::cos(DeltaPitchRadians);
-    // Calculate new position and three directions based on the updated pitch and yaw, and x,y,z
-    m_Position = glm::vec3(NewX, NewY, m_Position.z + DeltaZ);
-    m_Right = glm::normalize(glm::cross(m_Up, m_Forward));
-    m_Forward = glm::normalize(glm::vec3(-m_Position.x, 0.f, -m_Position.z));
-    m_Up = glm::normalize(glm::cross(m_Forward, m_Right));
-}
-
-void Camera::OrbitYaw(const float InDirection)
-{
-    m_Yaw += m_RotationSpeedFactor * InDirection;
-    m_Yaw = glm::mod(m_Yaw, 360.f);
-    const float YawRadians = glm::radians(m_Yaw);
-    const float NewX = m_OrbitRadius * glm::cos(YawRadians);
-    const float NewZ = m_OrbitRadius * glm::sin(YawRadians);
-    m_Position = glm::vec3(NewX, m_Position.y, NewZ);
-    m_Forward = glm::normalize(glm::vec3(-NewX, 0.f, -NewZ));
-    m_Right = glm::normalize(glm::cross(m_Up, m_Forward));
-}
-
-void Camera::OrbitPitch(const float InDirection)
-{
-    m_Pitch += m_RotationSpeedFactor * InDirection;
-    m_Pitch = glm::clamp(m_Pitch, -88.f, 88.f); // Gimbal lock!
-    const float PitchRadians = glm::radians(m_Pitch);
-    const float NewY = m_OrbitRadius * glm::sin(PitchRadians);
-    const float NewZ = m_OrbitRadius * glm::cos(PitchRadians);
-    m_Position = glm::vec3(m_Position.x, NewY, NewZ);
-    m_Forward = glm::normalize(glm::vec3(-m_Position.x, 0.f, -m_Position.z));
-    m_Up = glm::normalize(glm::cross(m_Forward, m_Right));
+    m_Pitch += m_RotationSpeedFactor * Input.MouseDelta.y;
+    m_Pitch = glm::clamp(m_Pitch, -89.f, 89.f); // Gimbal lock
+    RecomputePosAndBasis();
 }
 
 void Camera::Zoom(const InputResult& Input)
@@ -77,8 +33,8 @@ void Camera::Zoom(const InputResult& Input)
     m_ZoomX = glm::clamp(m_ZoomX, MIN_ZOOM_X, MAX_ZOOM_X);
 }
 
-void Camera::AdjustCameraForResize(const Commons::Layout::ViewportRect &OldViewport,
-                                   const Commons::Layout::ViewportRect &NewViewport)
+void Camera::AdjustCameraForResize(const Layout::ViewportRect &OldViewport,
+                                   const Layout::ViewportRect &NewViewport)
 {
     /*
      * When our viewport changes, it expands toward the bottom and the right
@@ -131,8 +87,13 @@ void Camera::AdjustCameraForResize(const Commons::Layout::ViewportRect &OldViewp
 
     // Calculate the world-space offset along camera's up and right directions
     const glm::vec3 Offset = m_Right * Dx * WorldWidth + m_Up * Dy * WorldHeight;
-    m_OriginLookAt = m_CurrentLookAt;
-    m_CurrentLookAt += Offset;
+    m_OriginLookAt += Offset;
+}
+
+void Camera::SetOrbitRadius(const float InOrbitRadius)
+{
+    m_OrbitRadius = InOrbitRadius;
+    RecomputePosAndBasis();
 }
 
 void Camera::GetViewMatrix(glm::mat4 &OutViewMatrix) const
@@ -144,8 +105,25 @@ void Camera::GetViewMatrix(glm::mat4 &OutViewMatrix) const
 void Camera::GetProjectionMatrix(glm::mat4 &OutProjectionMatrix, const float AspectRatio)
 {
     OutProjectionMatrix = glm::perspectiveLH_ZO(glm::radians(Camera::FIELD_OF_VIEW), AspectRatio, Camera::NEAR_PLANE, Camera::FAR_PLANE);
-    // According to math book, the projection matrix _01 should contain ZoomX and matrix _11 is zoom y?
-    OutProjectionMatrix[0][0] = m_ZoomX;
-    OutProjectionMatrix[1][1] = m_ZoomY;
+    // According to math book, the projection matrix _01 should contain ZoomX and matrix _11 is zoom y
+    OutProjectionMatrix[0][0] *= m_ZoomX;
+    OutProjectionMatrix[1][1] *= m_ZoomY;
+}
+
+void Camera::RecomputePosAndBasis()
+{
+    // Now update the camera positions and its local basis
+    const float YawRad = glm::radians(m_Yaw);
+    const float PitchRad = glm::radians(m_Pitch);
+    const float CosPitch = glm::cos(PitchRad);
+    // X = cos(pitch) * sin(yaw), Y = -sin(pitch), Z = cos(pitch) * cos(yaw)
+    m_Position = m_OriginLookAt + m_OrbitRadius * glm::vec3(CosPitch * glm::sin(YawRad), -glm::sin(PitchRad),
+        CosPitch * glm::cos(YawRad));
+    constexpr glm::vec3 WorldUp = glm::vec3(0.f, 1.f, 0.f);
+    m_Forward = glm::normalize(m_OriginLookAt - m_Position);
+    // World up is "co-planar" with the actual up (off by some translations, which does not affect vectors technically)
+    // So we can just use it to get the right vector using cross product
+    m_Right = glm::normalize(glm::cross(WorldUp, m_Forward));
+    m_Up = glm::normalize(glm::cross(m_Forward, m_Right));
 }
 

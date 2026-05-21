@@ -29,7 +29,6 @@ SoftwareRenderer::~SoftwareRenderer()
     // Clean up
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
     if (m_ParticleTexture)
     {
         SDL_DestroyTexture(m_ParticleTexture);
