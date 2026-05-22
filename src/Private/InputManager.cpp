@@ -124,6 +124,10 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 					}
 					// Note that SDL3's Y positive goes DOWN, so we negate it here
 					Result.MouseDelta += glm::vec2(Event.motion.xrel, -Event.motion.yrel);
+					// Tag this as a camera-drag event so Application::Frame routes it
+					// to Camera2D::Pan / Camera::Orbit. Without this the delta is
+					// accumulated but never consumed.
+					Result.Event = InputEvent::CameraPan;
 				}
 				else
 				{

@@ -242,11 +242,11 @@ private:
 	AllocatedVkBuffer CreateBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage, VkMemoryPropertyFlags Properties);
 	void GPUCopyBuffer(VkBuffer SrcBuffer, VkBuffer DstBuffer, VkDeviceSize Size);
 	AllocatedVkBuffer CreateBufferWithData(const void* Data, VkDeviceSize Size, VkBufferUsageFlags Usage);
-	void DestroyBuffer(AllocatedVkBuffer& VulkanBuffer);
 	bool CreateSyncObjects();
-	void CleanUpContext();
 
 	//Cleanups
+	void CleanUpContext();
+	void DestroyBuffer(AllocatedVkBuffer& VulkanBuffer);
 	void DestroyOffscreenTarget();
 	void DestroyParticleInstanceBuffers();
 

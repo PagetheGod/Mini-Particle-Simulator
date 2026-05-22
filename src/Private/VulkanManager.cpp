@@ -71,24 +71,17 @@ bool VulkanManager::Initialize(SDL_Window* InWindow)
         std::cerr << "CreateSwapChain failed!" << '\n';
         return Result;
     }
-    // Create offscreen target (for super sampling) and all render passes
-    Result = CreateOffscreenTarget(Layout::RENDER_WIDTH, Layout::RENDER_HEIGHT);
-    if (!Result)
-    {
-        std::cerr << "CreateOffscreenTarget failed!" << '\n';
-        return Result;
-    }
     Result = CreateOffScreenRenderPass();
     if (!Result)
     {
         std::cerr << "CreateOffScreenRenderPass failed!" << '\n';
         return Result;
     }
-    // Create frame buffers
-    Result = CreateFrameBuffers();
+    // Create offscreen target (for super sampling) and all render passes
+    Result = CreateOffscreenTarget(Layout::RENDER_WIDTH, Layout::RENDER_HEIGHT);
     if (!Result)
     {
-        std::cerr << "CreateFrameBuffers failed!" << '\n';
+        std::cerr << "CreateOffscreenTarget failed!" << '\n';
         return Result;
     }
     // Create command pool and allocate command buffers
@@ -109,6 +102,13 @@ bool VulkanManager::Initialize(SDL_Window* InWindow)
     if (!Result)
     {
         std::cerr << "CreateSwapChainRenderPass failed!" << '\n';
+        return Result;
+    }
+    // Create frame buffers
+    Result = CreateFrameBuffers();
+    if (!Result)
+    {
+        std::cerr << "CreateFrameBuffers failed!" << '\n';
         return Result;
     }
     // Particle Descriptor Layout
@@ -159,6 +159,16 @@ const Layout::ViewportRect& Viewport)
     VkResult AcquireResult = vkAcquireNextImageKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, UINT64_MAX,
         m_VulkanContext.ImageAvailableSemaphores[CurrentFrameIndex], nullptr, &ImageIndex);
     // Acquire Result can contain an error, handle it here by potentially recreating the swapchain, TODO
+    if (AcquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        // TODO: mark swapchain dirty and skip rest of the frame, then recreate next time
+        // useful for resize, DPI changes, etc. not implemented at the moment
+        return;
+    }
+    if (AcquireResult != VK_SUCCESS && AcquireResult != VK_SUBOPTIMAL_KHR)
+    {
+        return;
+    }
     // Reset the fence once we know we will actually submit the draw call
     vkResetFences(m_VulkanContext.VulkanDevice, 1, &m_VulkanContext.InFlightFence[CurrentFrameIndex]);
     RecordFrameCommandBuffer(m_VulkanContext.CommandBuffers[CurrentFrameIndex], CurrentFrameIndex, ImageIndex, InstanceCount,
@@ -173,20 +183,49 @@ const Layout::ViewportRect& Viewport)
     SubmitInfo.commandBufferCount = 1;
     SubmitInfo.pCommandBuffers = &m_VulkanContext.CommandBuffers[CurrentFrameIndex];
     SubmitInfo.signalSemaphoreCount = 1;
-    SubmitInfo.pSignalSemaphores = &m_VulkanContext.RenderFinishedSemaphores[CurrentFrameIndex];
-    vkQueueSubmit(m_VulkanContext.GraphicsQueue, 1, &SubmitInfo, m_VulkanContext.InFlightFence[CurrentFrameIndex]);
+    // RenderFinishedSemaphore is indexed by ImageIndex (per swapchain image),
+    // not by frame-in-flight — see CreateSyncObjects for rationale.
+    SubmitInfo.pSignalSemaphores = &m_VulkanContext.RenderFinishedSemaphores[ImageIndex];
+    // Diagnostic: print non-success returns from submit/present and the very-first
+    // success of each, so we can confirm frames are actually reaching the screen.
+    // (Static flags so we only print "first success" once.)
+    static bool s_FirstSubmitLogged = false;
+    static bool s_FirstPresentLogged = false;
+    VkResult SubmitResult = vkQueueSubmit(m_VulkanContext.GraphicsQueue, 1, &SubmitInfo,
+        m_VulkanContext.InFlightFence[CurrentFrameIndex]);
+    if (SubmitResult != VK_SUCCESS)
+    {
+        std::cerr << "[DrawFrame] vkQueueSubmit failed: VkResult=" << SubmitResult
+            << " frame=" << CurrentFrameIndex << " image=" << ImageIndex << std::endl;
+    }
+    else if (!s_FirstSubmitLogged)
+    {
+        std::cerr << "[DrawFrame] first vkQueueSubmit OK (frame=" << CurrentFrameIndex
+            << " image=" << ImageIndex << ")" << std::endl;
+        s_FirstSubmitLogged = true;
+    }
     // Present using the current image index, which tells vulkan which image to put on screen
     VkPresentInfoKHR PresentInfo{};
     PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     PresentInfo.waitSemaphoreCount = 1;
-    PresentInfo.pWaitSemaphores = &m_VulkanContext.RenderFinishedSemaphores[CurrentFrameIndex];
+    PresentInfo.pWaitSemaphores = &m_VulkanContext.RenderFinishedSemaphores[ImageIndex];
     PresentInfo.pImageIndices = &ImageIndex;
     PresentInfo.swapchainCount = 1;
     PresentInfo.pSwapchains = &m_VulkanContext.SwapChain;
-    vkQueuePresentKHR(m_VulkanContext.PresentQueue, &PresentInfo);
+    VkResult PresentResult = vkQueuePresentKHR(m_VulkanContext.PresentQueue, &PresentInfo);
+    if (PresentResult != VK_SUCCESS && PresentResult != VK_SUBOPTIMAL_KHR)
+    {
+        std::cerr << "[DrawFrame] vkQueuePresentKHR failed: VkResult=" << PresentResult
+            << " frame=" << CurrentFrameIndex << " image=" << ImageIndex << std::endl;
+    }
+    else if (!s_FirstPresentLogged)
+    {
+        std::cerr << "[DrawFrame] first vkQueuePresentKHR OK (frame=" << CurrentFrameIndex
+            << " image=" << ImageIndex << ")" << std::endl;
+        s_FirstPresentLogged = true;
+    }
     // Advance the frame counter
     m_VulkanContext.CurrentFrame = (CurrentFrameIndex + 1) % VulkanContext::MAX_FRAMES_IN_FLIGHT;
-
 }
 
 
@@ -408,13 +447,13 @@ uint32_t VulkanManager::RatePhysicalDevices(VkPhysicalDevice Device, VkSurfaceKH
     uint32_t Score = 0;
     if (Props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
     {
-        Score += 100;
+        Score += 1000;
     }
     else if (Props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
     {
-        Score += 10;
+        Score += 100;
     }
-    Score += Props.limits.maxImageDimension2D;
+    Score += Props.limits.maxImageDimension2D / 1000;
 
     return Score;
 }
@@ -441,8 +480,6 @@ bool VulkanManager::PickPhysicalDevice()
 
     for (const VkPhysicalDevice& Device : Devices)
     {
-        VkPhysicalDeviceProperties Props;
-        vkGetPhysicalDeviceProperties(Device, &Props);
         uint32_t Score = RatePhysicalDevices(Device, m_VulkanContext.VulkanSurface);
         if (Score > BestScore)
         {
@@ -508,6 +545,10 @@ bool VulkanManager::CreateLogicalDevice()
     Features_1_3.pNext = &Features_1_4;
     Features_1_3.dynamicRendering = VK_TRUE;
     Features_1_3.synchronization2 = VK_TRUE;
+    // Required by HLSL `clip()` — DXC compiles it to OpDemoteToHelperInvocation
+    // (SPIR-V Capability DemoteToHelperInvocation) rather than the older OpKill.
+    // Without this feature enabled, vkCreateShaderModule errors out per VUID-08740.
+    Features_1_3.shaderDemoteToHelperInvocation = VK_TRUE;
 
     // Vulkan 1.2 features
     VkPhysicalDeviceVulkan12Features Features_1_2{};
@@ -611,15 +652,17 @@ bool VulkanManager::CreateSwapChain()
         Extent.width = std::clamp(Extent.width, Capabilities.minImageExtent.width, Capabilities.maxImageExtent.width);
         Extent.height = std::clamp(Extent.height, Capabilities.minImageExtent.height, Capabilities.maxImageExtent.height);
     }
-    // Keep track of the min image count so we can pass it to imgui init vulkan later
-    uint32_t MinImageCount = Capabilities.minImageCount;
+    // Keep track of the min image count so we can pass it to imgui init vulkan later.
+    // ImGui's Vulkan backend asserts MinImageCount >= 2, so clamp upward — Capabilities
+    // can legally report a min of 1 (single-buffering) but our render loop assumes
+    // at least double-buffering anyway.
+    m_VulkanContext.MinImageCount = std::max(Capabilities.minImageCount, 2u);
     uint32_t ImageCount = Capabilities.minImageCount + 1;
     if (Capabilities.maxImageCount > 0 && ImageCount > Capabilities.maxImageCount)
     {
         // Clamp the the ImageCount so it doesn't go over our max supported swapchain buffer counts
         ImageCount = Capabilities.maxImageCount;
     }
-
     VkSwapchainCreateInfoKHR CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     CreateInfo.surface = m_VulkanContext.VulkanSurface;
@@ -669,10 +712,9 @@ bool VulkanManager::CreateSwapChain()
     m_VulkanContext.SwapChainExtent = Extent;
 
     vkGetSwapchainImagesKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, &ImageCount, nullptr);
-    m_VulkanContext.SwapChainImages.reserve(ImageCount);
+    m_VulkanContext.SwapChainImages.resize(ImageCount);
     vkGetSwapchainImagesKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, &ImageCount, m_VulkanContext.SwapChainImages.data());
-
-    m_VulkanContext.SwapChainImageViews.reserve(ImageCount);
+    m_VulkanContext.SwapChainImageViews.resize(ImageCount);
 
     for (size_t i = 0; i < ImageCount; i++)
     {
@@ -706,6 +748,7 @@ bool VulkanManager::CreateSwapChain()
 bool VulkanManager::CreateOffscreenTarget(uint32_t Width, uint32_t Height) {
     m_VulkanContext.OffScreen.Width = Width;
     m_VulkanContext.OffScreen.Height = Height;
+    m_VulkanContext.OffScreen.Format = m_VulkanContext.SwapChainFormat;
 
     // Create the image
     // COLOR_ATTACHMENT: we render to it
@@ -750,6 +793,16 @@ bool VulkanManager::CreateOffscreenTarget(uint32_t Width, uint32_t Height) {
         &m_VulkanContext.OffScreen.VkMemory) != VK_SUCCESS)
     {
         std::cerr << "Failed to allocate offscreen memory!" << '\n';
+        return false;
+    }
+
+    // Bind the allocated memory to the image. Without this the image has no
+    // backing storage and the subsequent vkCreateImageView / vkCreateFramebuffer
+    // / vkCmdBlitImage calls all error out with "VkImage used with no memory bound".
+    if (vkBindImageMemory(m_VulkanContext.VulkanDevice, m_VulkanContext.OffScreen.VkImage,
+        m_VulkanContext.OffScreen.VkMemory, 0) != VK_SUCCESS)
+    {
+        std::cerr << "Failed to bind offscreen image memory!" << '\n';
         return false;
     }
 
@@ -1000,9 +1053,9 @@ bool VulkanManager::CreateGraphicsPipeline()
 
     VkPipelineVertexInputStateCreateInfo VertexInputStateCreateInfo = {};
     VertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    VertexInputStateCreateInfo.vertexBindingDescriptionCount = 2; // We got two different binding descriptions, vertex and instance
+    VertexInputStateCreateInfo.vertexBindingDescriptionCount = 1; // Only one
     VertexInputStateCreateInfo.pVertexBindingDescriptions = VertexBindingDescriptions;
-    VertexInputStateCreateInfo.vertexAttributeDescriptionCount = 4; // We have 4 different attribute descriptions, 1 vertex + 3 instance varibles
+    VertexInputStateCreateInfo.vertexAttributeDescriptionCount = 1; // We have only one attribute now
     VertexInputStateCreateInfo.pVertexAttributeDescriptions = AttributeDescriptions;
 
     // Create input assembler, viewport state, rasterizer and multisampling
@@ -1190,7 +1243,7 @@ bool VulkanManager::CreateParticleInstanceBuffers(uint32_t NumMaxParticles)
              * So the buffer stays mapped until we free the memory. And we do not have to suffer from
              * per frame map and unmap overhead
              */
-            VkResult MapResult = vkMapMemory(m_VulkanContext.VulkanDevice, Buffers[i]->VulkanDeviceMemory, 0, BufferSize,
+            VkResult MapResult = vkMapMemory(m_VulkanContext.VulkanDevice, Buffers[j]->VulkanDeviceMemory, 0, BufferSize,
                 0, &FrameInstanceBufferRef.MappedPtr[j]);
             if (MapResult != VK_SUCCESS)
             {
@@ -1268,7 +1321,7 @@ bool VulkanManager::CreateParticleDescriptorPoolsAndSets()
 
     VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo = {};
     DescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    DescriptorSetAllocateInfo.descriptorPool = m_VulkanContext.DescriptorPool;
+    DescriptorSetAllocateInfo.descriptorPool = m_VulkanContext.ParticleInstanceDescriptorPool;
     DescriptorSetAllocateInfo.descriptorSetCount = VulkanContext::MAX_FRAMES_IN_FLIGHT;
     DescriptorSetAllocateInfo.pSetLayouts = Layouts;
 
@@ -1281,7 +1334,7 @@ bool VulkanManager::CreateParticleDescriptorPoolsAndSets()
     }
     for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
     {
-        m_VulkanContext.DescriptorSets[i] = DescriptorSets[i];
+        m_VulkanContext.ParticleInstanceBufferArray[i].DescriptorSet = DescriptorSets[i];
     }
 
     /*
@@ -1302,16 +1355,16 @@ bool VulkanManager::CreateParticleDescriptorPoolsAndSets()
         };
         for (uint32_t j = 0; j < 9; j++)
         {
-            DescriptorBufferInfo[i].buffer = Buffers[j]->VulkanBuffer;
-            DescriptorBufferInfo[i].offset = 0;
-            DescriptorBufferInfo[i].range = Buffers[j]->VulkanBufferSize; // Entire buffer
+            DescriptorBufferInfo[j].buffer = Buffers[j]->VulkanBuffer;
+            DescriptorBufferInfo[j].offset = 0;
+            DescriptorBufferInfo[j].range = Buffers[j]->VulkanBufferSize; // Entire buffer
         }
         // Build VkWriteDescriptorSet for all bindings
         VkWriteDescriptorSet WriteDescriptorSets[9] = {};
         for (uint32_t j = 0; j < 9; j++)
         {
             WriteDescriptorSets[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            WriteDescriptorSets[j].dstSet = m_VulkanContext.DescriptorSets[j];
+            WriteDescriptorSets[j].dstSet = m_VulkanContext.ParticleInstanceBufferArray[i].DescriptorSet;
             WriteDescriptorSets[j].dstBinding = j; // Matches the binding N in shaders
             WriteDescriptorSets[j].dstArrayElement = 0;
             WriteDescriptorSets[j].descriptorCount = 1;
@@ -1454,6 +1507,7 @@ AllocatedVkBuffer VulkanManager::CreateBufferWithData(const void* Data, VkDevice
     GPUCopyBuffer(StagingBuffer.VulkanBuffer, DeviceLocalBuffer.VulkanBuffer, Size);
     // Free the staging buffer so it's a one time resource for this copying operation
     DestroyBuffer(StagingBuffer);
+    return DeviceLocalBuffer;
 }
 
 // Small helper to clean up the custom AllocatedVkBuffer struct
@@ -1470,10 +1524,24 @@ void VulkanManager::DestroyBuffer(AllocatedVkBuffer& VulkanBuffer)
 }
 
 bool VulkanManager::CreateSyncObjects() {
-    // These are similar to mutexes we learned in class
+    /* Sync objects come in two flavors here:
+     *
+     *  - ImageAvailableSemaphores / InFlightFence: per frame-in-flight. They
+     *    pair with our CPU pacing (CurrentFrame % MAX_FRAMES_IN_FLIGHT).
+     *
+     *  - RenderFinishedSemaphores: per swapchain image. This one is the catch.
+     *    A render-finished semaphore is signaled by our queue submit and waited
+     *    on by vkQueuePresentKHR — and Vulkan keeps it "in use" by the swapchain
+     *    until that image is re-acquired. With 3 swapchain images but only 2
+     *    frames-in-flight, indexing it by frame causes the validator's
+     *    "Swapchain image X was presented but was not re-acquired" reuse error.
+     *    Per the Vulkan guide on swapchain semaphore reuse, the fix is to size
+     *    this set by the swapchain image count and index by ImageIndex when
+     *    used in submit/present.
+     */
     m_VulkanContext.ImageAvailableSemaphores.resize(VulkanContext::MAX_FRAMES_IN_FLIGHT);
-    m_VulkanContext.RenderFinishedSemaphores.resize(VulkanContext::MAX_FRAMES_IN_FLIGHT);
     m_VulkanContext.InFlightFence.resize(VulkanContext::MAX_FRAMES_IN_FLIGHT);
+    m_VulkanContext.RenderFinishedSemaphores.resize(m_VulkanContext.SwapChainImages.size());
 
     VkSemaphoreCreateInfo SemaphoreCreateInfo = {};
     SemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1492,18 +1560,21 @@ bool VulkanManager::CreateSyncObjects() {
             std::cerr << "Failed to create image available semaphore! VkResult: " << Result << '\n';
             return false;
         }
-        Result = vkCreateSemaphore(m_VulkanContext.VulkanDevice, &SemaphoreCreateInfo,
-            nullptr, &m_VulkanContext.RenderFinishedSemaphores[i]);
-        if (Result != VK_SUCCESS)
-        {
-            std::cerr << "Failed to create render finished semaphore! VkResult: " << Result << '\n';
-            return false;
-        }
         Result = vkCreateFence(m_VulkanContext.VulkanDevice, &FenceCreateInfo,
             nullptr, &m_VulkanContext.InFlightFence[i]);
         if (Result != VK_SUCCESS)
         {
             std::cerr << "Failed to create in flight fence! VkResult: " << Result << '\n';
+            return false;
+        }
+    }
+    for (size_t i = 0; i < m_VulkanContext.RenderFinishedSemaphores.size(); i++)
+    {
+        Result = vkCreateSemaphore(m_VulkanContext.VulkanDevice, &SemaphoreCreateInfo,
+            nullptr, &m_VulkanContext.RenderFinishedSemaphores[i]);
+        if (Result != VK_SUCCESS)
+        {
+            std::cerr << "Failed to create render finished semaphore! VkResult: " << Result << '\n';
             return false;
         }
     }
@@ -1518,13 +1589,20 @@ void VulkanManager::CleanUpContext()
      * swapchain render pass -> offscreen target (framebuffer, render pass, view, image, memory) -> swapchain -> device ->
      * debug messenger -> surface -> instance
      */
-    vkDeviceWaitIdle(m_VulkanContext.VulkanDevice);
-    // Sync objects
+    if (m_VulkanContext.VulkanDevice)
+    {
+        vkDeviceWaitIdle(m_VulkanContext.VulkanDevice);
+    }
+    // Sync objects. ImageAvailable + InFlightFence are sized by frames-in-flight;
+    // RenderFinished is sized by swapchain image count, so destroy them in separate loops.
     for (uint32_t i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; i++)
     {
         vkDestroySemaphore(m_VulkanContext.VulkanDevice, m_VulkanContext.ImageAvailableSemaphores[i], nullptr);
-        vkDestroySemaphore(m_VulkanContext.VulkanDevice, m_VulkanContext.RenderFinishedSemaphores[i], nullptr);
         vkDestroyFence(m_VulkanContext.VulkanDevice, m_VulkanContext.InFlightFence[i], nullptr);
+    }
+    for (size_t i = 0; i < m_VulkanContext.RenderFinishedSemaphores.size(); i++)
+    {
+        vkDestroySemaphore(m_VulkanContext.VulkanDevice, m_VulkanContext.RenderFinishedSemaphores[i], nullptr);
     }
 
     // Command pool
@@ -1641,23 +1719,11 @@ void VulkanManager::DestroyParticleInstanceBuffers()
         {
             DestroyBuffer(*Buffer);
         }
-        for (void* MappedPtr : BufferSet.MappedPtr)
+        for (void*& MappedPtr : BufferSet.MappedPtr)
         {
             MappedPtr = nullptr;
         }
         BufferSet.DescriptorSet = nullptr;
-
-        if (m_VulkanContext.ParticleInstanceDescriptorPool)
-        {
-            // Destroying the pool will free all sets allocated from it implicitly
-            vkDestroyDescriptorPool(m_VulkanContext.VulkanDevice, m_VulkanContext.ParticleInstanceDescriptorPool, nullptr);
-            m_VulkanContext.ParticleInstanceDescriptorPool = nullptr;
-        }
-        if (m_VulkanContext.ParticleInstanceDescriptorSetLayout)
-        {
-            vkDestroyDescriptorSetLayout(m_VulkanContext.VulkanDevice, m_VulkanContext.ParticleInstanceDescriptorSetLayout, nullptr);
-            m_VulkanContext.ParticleInstanceDescriptorSetLayout = nullptr;
-        }
     }
 }
 
@@ -1951,7 +2017,7 @@ void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint
     VkImageBlit BlitRegion = {};
     BlitRegion.srcOffsets[0] = { 0, 0 };
     BlitRegion.srcOffsets[1] = { static_cast<int>(ParticleVkViewport.width * BlitScaleX),
-        static_cast<int>(ParticleVkViewport.height * BlitScaleY) };
+        static_cast<int>(ParticleVkViewport.height * BlitScaleY), 1 };
     BlitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     BlitRegion.srcSubresource.mipLevel = 0;
     BlitRegion.srcSubresource.baseArrayLayer = 0;
@@ -1960,10 +2026,12 @@ void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint
     BlitRegion.dstSubresource.mipLevel = 0;
     BlitRegion.dstSubresource.baseArrayLayer = 0;
     BlitRegion.dstSubresource.layerCount = 1;
-    BlitRegion.dstOffsets[0] = { static_cast<int>(Viewport.X),
-        static_cast<int>(Viewport.Y), 0 };
-    BlitRegion.dstOffsets[1] = { static_cast<int>(Viewport.X + Viewport.Width * BlitScaleX),
-        static_cast<int>(Viewport.Y + Viewport.Height * BlitScaleY), 1 };
+    // We need to be consistent with using logical points or physical coordinates
+    // When the src or dest are VK Image 2D, the BlitRegion.src/destOffsets[0].z must be 0, and the [1].z must be 1
+    BlitRegion.dstOffsets[0] = { static_cast<int>(Viewport.X * BlitScaleX),
+        static_cast<int>(Viewport.Y * BlitScaleY), 0 };
+    BlitRegion.dstOffsets[1] = { static_cast<int>((Viewport.X + Viewport.Width) * BlitScaleX),
+        static_cast<int>((Viewport.Y + Viewport.Height) * BlitScaleY), 1 };
     vkCmdBlitImage(CommandBuffer, m_VulkanContext.OffScreen.VkImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         m_VulkanContext.SwapChainImages[ImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1, &BlitRegion, VK_FILTER_LINEAR);
@@ -2010,6 +2078,7 @@ void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint
     // Synchronization Point - Swapchain image now transistions to PRESENT_SRC_KHR
     vkCmdEndRenderPass(CommandBuffer);
     vkEndCommandBuffer(CommandBuffer);
+
 }
 
 /* Helper: Debug callback function
@@ -2048,6 +2117,5 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
         // They're very noisy but useful for debugging initialization issues.
         // std::printf("[VULKAN INFO] %s\n", pCallbackData->pMessage);
     }
-
     return VK_FALSE;
 }

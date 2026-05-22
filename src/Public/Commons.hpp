@@ -1,5 +1,8 @@
 ﻿#pragma once
 #include <random>
+#include <cstdarg>
+#include <cstdio>
+#include <SDL3/SDL_messagebox.h>
 
 // The PCG random lib I grabbed has virtually no MSVC support
 // So guarding against that
@@ -12,6 +15,25 @@ namespace Commons
 {
     namespace Utility
     {
+        /*
+         * Surfaces an error to the user via a modal SDL message box.
+         * Use this for failures that would otherwise be invisible: on Windows GUI
+         * apps stderr usually isn't attached to anything, and the window can close
+         * before the user reads anything we print. The message box blocks until OK
+         * is pressed, so the caller can still return false right after and have
+         * the user actually see what went wrong.
+         * Format follows printf rules.
+         */
+        static inline void ShowError(const char* Title, const char* Format, ...)
+        {
+            char Buffer[512];
+            va_list Args;
+            va_start(Args, Format);
+            vsnprintf(Buffer, sizeof(Buffer), Format, Args);
+            va_end(Args);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, Title, Buffer, nullptr);
+        }
+
         // Helper to generate a random floating point number between [Min, Max)
         static inline float RandomFloat(const float Min, const float Max)
         {

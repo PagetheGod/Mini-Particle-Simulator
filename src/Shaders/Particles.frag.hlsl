@@ -2,7 +2,7 @@ struct ParticleInput
 {
     float4 Position : SV_POSITION;
     [[vk::location(0)]] float4 FragmentColor : COLOR0;
-    [[vk::location(1)]] float4 FragmentTexCoord : TEXCOORD0;
+    [[vk::location(1)]] float2 FragmentTexCoord : TEXCOORD0;
 };
 
 float4 main(ParticleInput Input) : SV_TARGET0

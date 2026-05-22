@@ -3,15 +3,11 @@
 #define MINIPARTICLESIMULATOR_SIMD_HPP
 #include <cstdint>
 
-<<<<<<< HEAD
-
-=======
 /*
  * A class that is responsible for checking simd supports, and provide wrappers around all the
  * SIMD intrinsics, as of right now, it ONLY supports x86-64 SIMD intrinsics
  * No plan for ARM support for now
  */
->>>>>>> 17864f3 (Added more comments. Removed dead functions)
 
 
 

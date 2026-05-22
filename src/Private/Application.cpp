@@ -39,34 +39,21 @@ bool Application::Initialize() {
 	bool Result = false;
 	if (!SDL_Init(SDL_INIT_VIDEO))
 	{
-		// Using a message box show the error, this is currently experimental, will move ALL error
-		// notifications to this later if it works
-		char ErrorMsg[128];
-		sprintf(ErrorMsg, "SDL could not initialize! SDL_Error: %s", SDL_GetError());
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", ErrorMsg, nullptr);
+		Utility::ShowError("Error", "SDL could not initialize! SDL_Error: %s", SDL_GetError());
 		return Result;
 	}
 
 	// Set up the flags to create our window
 	// Last flag handles high-DPI displays so our drawable area matches the pixel counts
 	constexpr SDL_WindowFlags WindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-	m_Window = SDL_CreateWindow(Commons::Constants::WINDOW_TITLE, Layout::WINDOW_WIDTH, Layout::WINDOW_HEIGHT,
+	m_Window = SDL_CreateWindow(Constants::WINDOW_TITLE, Layout::WINDOW_WIDTH, Layout::WINDOW_HEIGHT,
 		WindowFlags);
 	if (!m_Window)
 	{
-		std::cerr << "Could not create window! SDL_Error: " << SDL_GetError() << std::endl;
+		Utility::ShowError("Error", "Could not create window! SDL_Error: %s", SDL_GetError());
 		return Result;
 	}
 
-	// Get the vulkan instance extensions that SDL needs for creating a surface on our platform
-	// It handles cross-platform automatically
-	uint32_t ExtensionCount = 0;
-	const char* const* Extensions = SDL_Vulkan_GetInstanceExtensions(&ExtensionCount);
-	if (!Extensions)
-	{
-		std::cerr << "Failed to get Vulkan extensions: " << SDL_GetError() << '\n';
-		return Result;
-	}
 	if (!ShowStartupDialog())
 	{
 		return false;
@@ -91,7 +78,7 @@ bool Application::Initialize() {
 		Result = m_SoftwareRenderer->Initialize(m_Window);
 		if (!Result)
 		{
-			std::cerr << "Failed to initialize software renderer!" << std::endl;
+			Utility::ShowError("Software Renderer", "Failed to initialize software renderer.");
 			return Result;
 		}
 		// Set the camera ptr because we need it to do camera movements
@@ -99,17 +86,22 @@ bool Application::Initialize() {
 	}
 	else
 	{
+		// Probe Vulkan instance extensions before constructing the renderer so we
+		// fail fast with a useful error if Vulkan isn't even available on this box.
+		uint32_t ExtensionCount = 0;
+		const char* const* Extensions = SDL_Vulkan_GetInstanceExtensions(&ExtensionCount);
+		if (!Extensions)
+		{
+			Utility::ShowError("Hardware Renderer", "Failed to get Vulkan extensions: %s", SDL_GetError());
+			return Result;
+		}
 		m_HardwareRenderer = std::make_unique<HardwareRenderer>(m_ParticleManager.get());
 		Result = m_HardwareRenderer->Initialize(m_Window);
 		if (!Result)
 		{
-			std::cerr << "Failed to initialize hardware renderer!" << std::endl;
+			Utility::ShowError("Hardware Renderer", "Failed to initialize hardware renderer.");
 			return Result;
 		}
-		// Critical for vulkan, since vulkan's swap chain cares about the real pixel counts, not window size
-		int DrawableWidth = 0;
-		int DrawableHeight = 0;
-		SDL_GetWindowSizeInPixels(m_Window, &DrawableWidth, &DrawableHeight);
 		m_Camera = m_HardwareRenderer->GetCamera();
 	}
 	// Do the initialization of particle manager last because it requires lots of allocations
@@ -160,7 +152,7 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 		}
 
 	}
-	if (Input.Event == InputEvent::CameraPan)
+	else if (Input.Event == InputEvent::CameraPan)
 	{
 		if (m_RendererType == RendererType::Software)
 		{
@@ -172,7 +164,7 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 		}
 
 	}
-	if (Input.Event == InputEvent::CameraZoom)
+	else if (Input.Event == InputEvent::CameraZoom)
 	{
 		if (m_RendererType == RendererType::Software)
 		{
@@ -228,11 +220,20 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 bool Application::ShowStartupDialog()
 {
 	// ── Step 1: Create a temporary SDL_Renderer ──
-	// This is the software renderer. It's trivial to create and
-	// works on every platform without any GPU setup.
 	// Got a bit of chicken and egg issue here, no renderer before the start up, requires a renderer to show the start up
-	// So we just create the start up using a temporary SDL Renderer, clean it up after we are done
-	SDL_Renderer* Renderer = SDL_CreateRenderer(m_Window, nullptr);
+	// So we just create the start up using a temporary SDL Renderer, clean it up after we are done.
+	//
+	// IMPORTANT: explicitly request the "software" driver. The window has the
+	// SDL_WINDOW_VULKAN flag, and if we pass nullptr SDL picks the "best"
+	// available driver (D3D12 / Vulkan on Windows). Either of those attaches a
+	// hardware swapchain to the HWND. After SDL_DestroyRenderer the HWND stays
+	// in a half-released compositor state, and our subsequent vkCreateSwapchainKHR
+	// presents succeed at the API level but never composite to the visible window —
+	// DWM keeps showing SDL's last frame (the highlighted "Select GPU" button).
+	// The software driver doesn't install a hardware compositor on the HWND, so
+	// Vulkan can attach cleanly afterwards. The dialog only renders text+buttons,
+	// software is plenty fast for that.
+	SDL_Renderer* Renderer = SDL_CreateRenderer(m_Window, "software");
 	if (!Renderer)
 	{
 		std::printf("Failed to create renderer for startup dialog: %s\n",

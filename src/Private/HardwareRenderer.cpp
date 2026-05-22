@@ -45,7 +45,7 @@ bool HardwareRenderer::Initialize(SDL_Window* InWindow)
     Result = m_VulkanManager->Initialize(InWindow);
     if (!Result)
     {
-        std::cerr << "Failed to initialize the Vulkan manager." << std::endl;
+        Utility::ShowError("Hardware Renderer", "Failed to initialize the Vulkan manager. See validation-layer output for details.");
         return Result;
     }
     m_Camera = std::make_unique<Camera>();
@@ -70,13 +70,13 @@ bool HardwareRenderer::Initialize(SDL_Window* InWindow)
     Result = ImGui_ImplSDL3_InitForVulkan(m_Window);
     if (!Result)
     {
-        std::cerr << "HardwareManager: ImGui_ImplSDL3_InitForVulkan() failed. Error code" << std::endl;
+        Utility::ShowError("Hardware Renderer", "ImGui_ImplSDL3_InitForVulkan() failed.");
         return Result;
     }
     Result = ImGui_ImplVulkan_Init(&ImGuiVkInitInfo);
     if (!Result)
     {
-        std::cerr << "HardwareManager: ImGui_ImplVulkan_Init() failed." << std::endl;
+        Utility::ShowError("Hardware Renderer", "ImGui_ImplVulkan_Init() failed.");
         return Result;
     }
     // Create the persistent vertex buffer containing the six quad vertices
@@ -84,7 +84,7 @@ bool HardwareRenderer::Initialize(SDL_Window* InWindow)
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     if (m_VertexBuffer.VulkanBuffer == nullptr)
     {
-        std::cerr << "HardwareManager: Failed to create vertex buffer." << std::endl;
+        Utility::ShowError("Hardware Renderer", "Failed to create the quad vertex buffer.");
         return Result;
     }
     return Result;
@@ -113,7 +113,7 @@ void HardwareRenderer::EndFrame(const bool IsPanelOpen)
     m_Camera->GetViewMatrix(ViewMatrix);
     m_Camera->GetProjectionMatrix(ProjectionMatrix, Layout::ASPECT_RATIO);
     const glm::mat4x4 ViewProjection = ProjectionMatrix * ViewMatrix;
-    PushConstants.ViewProjection = ViewProjection;
+    PushConstants.ViewProjection = glm::transpose(ViewProjection);
     // Upload the particle data, we wait for the fence here to synchronize
     const uint32_t CurrentFrameIndex = m_VulkanContextPtr->CurrentFrame;
     // Needs to wait for GPU to finish its current work

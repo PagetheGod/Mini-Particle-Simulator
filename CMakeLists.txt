@@ -88,6 +88,13 @@ add_executable(${PROJECT_NAME}
         src/Private/Camera2D.cpp
 )
 
+# Architecture detection. Used to gate x86-only SIMD compile flags below.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64)|(AMD64)|(amd64)")
+    set(IS_X86_64 TRUE)
+else()
+    set(IS_X86_64 FALSE)
+endif()
+
 # SIMD.cpp now provides both x86 detection and scalar fallbacks for ARM.
 # _xgetbv needs -mxsave on the x86 code path for Clang/GCC.
 if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
@@ -179,9 +186,9 @@ set(SHADER_OUTPUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Shaders)
 # 2. Its shader stage and model(vs/ps/cs, HLSL SM 6.4)
 # 3. Its output file name
 set(SHADER_SOURCES
-    ${CMAKE_SOURCE_DIR}/src/Shaders/Particle.vert.hlsl vs_6_4 Particle.vert
-    ${CMAKE_SOURCE_DIR}/src/Shaders/Particle.frag.hlsl ps_6_4 Particle.frag
-    ${CMAKE_SOURCE_DIR}/src/Shaders/Particle.update.comp.hlsl cs_6_4 Particle_Update.comp
+    ${CMAKE_SOURCE_DIR}/src/Shaders/Particles.vert.hlsl vs_6_4 Particles.vert
+    ${CMAKE_SOURCE_DIR}/src/Shaders/Particles.frag.hlsl ps_6_4 Particles.frag
+    #${CMAKE_SOURCE_DIR}/src/Shaders/Particles.update.comp.hlsl cs_6_4 Particles_Update.comp
 )
 # Parse the shader list (triplets: source, profile, output_name)
 set(SHADER_BINARIES "") # This creates a list in CMake, it starts out empty
@@ -222,7 +229,7 @@ foreach (SHADER_IDX RANGE 0 ${SHADER_COUNT})
             -E main
             ${SHADER_SRC}
             -Fo ${SHADER_SPV}
-            -fspv-target-env=vulkan1.4
+            -fspv-target-env=vulkan1.3
             -Zpc
             -WX
         DEPENDS ${SHADER_SRC}
@@ -240,8 +247,6 @@ add_custom_target(CompileShaders ALL DEPENDS ${SHADER_BINARIES})
 add_dependencies(${PROJECT_NAME} CompileShaders)
 
 
-
-# ---------------------------------------------------------------------------
 # Include directories
 # target_include_directories() tells the compiler where to find header files
 # for our target. This way we do not have to say Public/<Header Path>, instead we

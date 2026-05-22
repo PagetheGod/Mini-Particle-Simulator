@@ -67,7 +67,7 @@ VertexOutput main(VertexInput Input, uint InstanceID : SV_InstanceID)
     float InstanceSize = Size[InstanceID];
     float InstanceLifeTime = LifeTime[InstanceID];
     float InstanceMaxLifeTime = MaxLifeTime[InstanceID];
-    float InstanceAlpha = InstanceLifeTime / InstanceMaxLifeTime; // Lifetime based linear fades, can be removed
+    //float InstanceAlpha = InstanceLifeTime / InstanceMaxLifeTime; // Lifetime based linear fades, can be removed
     
     // Calculate the world position of all particle vertices using camera right and up vectors
     // So we get a billboard that always faces the camera
@@ -83,15 +83,15 @@ VertexOutput main(VertexInput Input, uint InstanceID : SV_InstanceID)
      * Note how x is either -1 or 1, so by multiplying it with camera right, we can get both the left and right vertices' x positions
      * Same thing for the camera up and the y position, we can get both the top and bottom vertices' y positions
      */
-    WorldPos += (PushConstants.CameraRight * Input.Position.x * Input.InstanceSize);
-    WorldPos += (PushConstants.CameraUp * Input.Position.y * Input.InstanceSize);
+    WorldPos.xyz += PushConstants.CameraRight * Input.Position.x * InstanceSize;
+    WorldPos.xyz += PushConstants.CameraUp * Input.Position.y * InstanceSize;
 
     // Transform the vertex coordinate to clip space using the view projection matrix
     // HLSL uses row-major order, so multiplication goes from left to right
     WorldPos = mul(WorldPos, PushConstants.ViewProjection);
 
     Output.Position = WorldPos;
-    Output.FragmentColor = Input.InstanceColor;
+    Output.FragmentColor = InstanceColor;
     /*
      * This looks a little bit weird because we are not actually using the UV in the fragment shader to sample any texture
      * We are using the UV as a way to generate color directly, based on the fragment's distance away from the center of the particle
