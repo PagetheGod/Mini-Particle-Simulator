@@ -5,7 +5,7 @@
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 using namespace Commons;
-Camera::Camera() : m_Position(glm::vec3(0.0f, 0.0f, -m_OrbitRadius)), m_Up(glm::vec3(0.0f, 1.0f, 0.0f)), m_Right(glm::vec3(1.0f, 0.0f, 0.0f)),
+Camera::Camera() : m_Position(glm::vec3(0.0f, 5.0f, -m_OrbitRadius)), m_Up(glm::vec3(0.0f, 1.0f, 0.0f)), m_Right(glm::vec3(1.0f, 0.0f, 0.0f)),
                    m_Forward(glm::vec3(0.0f, 0.0f, 1.0f)), m_OriginLookAt(glm::vec3(0.f))
 {
 
@@ -17,8 +17,8 @@ void Camera::Orbit(const InputResult& Input)
     // First calculate the new yaw and pitch. We have no roll here
     m_Yaw += m_RotationSpeedFactor * Input.MouseDelta.x;
     m_Yaw = glm::mod(m_Yaw, 360.f);
-    m_Pitch += m_RotationSpeedFactor * Input.MouseDelta.y;
-    m_Pitch = glm::clamp(m_Pitch, -89.f, 89.f); // Gimbal lock
+    m_Pitch += m_RotationSpeedFactor * (-Input.MouseDelta.y);
+    m_Pitch = glm::clamp(m_Pitch, 0.f, 60.f); // No point looking from below the plane
     RecomputePosAndBasis();
 }
 
@@ -104,7 +104,7 @@ void Camera::GetViewMatrix(glm::mat4 &OutViewMatrix) const
 
 void Camera::GetProjectionMatrix(glm::mat4 &OutProjectionMatrix, const float AspectRatio)
 {
-    OutProjectionMatrix = glm::perspectiveLH_ZO(glm::radians(Camera::FIELD_OF_VIEW), AspectRatio, Camera::NEAR_PLANE, Camera::FAR_PLANE);
+    OutProjectionMatrix = glm::perspectiveLH_ZO(glm::radians(FIELD_OF_VIEW), AspectRatio, NEAR_PLANE, FAR_PLANE);
     // According to math book, the projection matrix _01 should contain ZoomX and matrix _11 is zoom y
     OutProjectionMatrix[0][0] *= m_ZoomX;
     OutProjectionMatrix[1][1] *= m_ZoomY;

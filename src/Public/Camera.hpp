@@ -44,14 +44,14 @@ private:
     void RecomputePosAndBasis();
 
 private:
-    float m_OrbitRadius = 100.f;
+    float m_OrbitRadius = 350.f;
     glm::vec3 m_Position;
     // All three are normalized
     glm::vec3 m_Up;
     glm::vec3 m_Right;
     glm::vec3 m_Forward;
     glm::vec3 m_OriginLookAt;
-    float m_RotationSpeedFactor = 15.f;
+    float m_RotationSpeedFactor = 0.5f;
     float m_ZoomSpeedFactor = 0.25f;
     float m_Yaw = 180.f;
     float m_Pitch = 0.f;

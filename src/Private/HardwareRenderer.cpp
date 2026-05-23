@@ -110,8 +110,10 @@ void HardwareRenderer::EndFrame(const bool IsPanelOpen)
     PushConstants.CameraUp = m_Camera->GetUp();
     glm::mat4x4 ViewMatrix;
     glm::mat4x4 ProjectionMatrix;
+    const Layout::ViewportRect Viewport = Layout::GetViewportRect(IsPanelOpen);
     m_Camera->GetViewMatrix(ViewMatrix);
-    m_Camera->GetProjectionMatrix(ProjectionMatrix, Layout::ASPECT_RATIO);
+    m_Camera->GetProjectionMatrix(ProjectionMatrix,
+        static_cast<float>(Viewport.Width) / static_cast<float>(Viewport.Height));
     const glm::mat4x4 ViewProjection = ProjectionMatrix * ViewMatrix;
     PushConstants.ViewProjection = glm::transpose(ViewProjection);
     // Upload the particle data, we wait for the fence here to synchronize
@@ -123,7 +125,7 @@ void HardwareRenderer::EndFrame(const bool IsPanelOpen)
         m_ParticleManager->GetParticleCount());
     // Tell Vulkan manager to draw the current frame
     m_VulkanManager->DrawFrame(m_ParticleManager->GetParticleCount(), m_VertexBuffer, PushConstants,
-        Layout::GetViewportRect(IsPanelOpen));
+        Viewport);
 }
 
 

@@ -178,13 +178,13 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
         IsConfigDirty |= ImGui::SliderFloat("Burst Interval", &Config.BurstInterval, 0.5f, 2.5f);
         // We reuse the Emitter Rate variable for both burst and continuous emitter
         IsConfigDirty |= ImGui::SliderInt("Particle Count Per Burst", &Config.EmissionRate,
-            5, 3500);
+            5, 5000);
     }
     else
     {
         // These numbers are kinda arbitrary, might be better to define them in commons.hpp
         // As constants, however, since we are just using them here, it's ok for now
-        IsConfigDirty |= ImGui::SliderInt("Particle Per Second", &Config.EmissionRate, 50, 5000);
+        IsConfigDirty |= ImGui::SliderInt("Particle Per Second", &Config.EmissionRate, 50, 100'000);
     }
 
     // Emitter lifetime - how long will our emitter spawn particles for

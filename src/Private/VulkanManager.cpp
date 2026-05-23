@@ -186,24 +186,8 @@ const Layout::ViewportRect& Viewport)
     // RenderFinishedSemaphore is indexed by ImageIndex (per swapchain image),
     // not by frame-in-flight — see CreateSyncObjects for rationale.
     SubmitInfo.pSignalSemaphores = &m_VulkanContext.RenderFinishedSemaphores[ImageIndex];
-    // Diagnostic: print non-success returns from submit/present and the very-first
-    // success of each, so we can confirm frames are actually reaching the screen.
-    // (Static flags so we only print "first success" once.)
-    static bool s_FirstSubmitLogged = false;
-    static bool s_FirstPresentLogged = false;
     VkResult SubmitResult = vkQueueSubmit(m_VulkanContext.GraphicsQueue, 1, &SubmitInfo,
         m_VulkanContext.InFlightFence[CurrentFrameIndex]);
-    if (SubmitResult != VK_SUCCESS)
-    {
-        std::cerr << "[DrawFrame] vkQueueSubmit failed: VkResult=" << SubmitResult
-            << " frame=" << CurrentFrameIndex << " image=" << ImageIndex << std::endl;
-    }
-    else if (!s_FirstSubmitLogged)
-    {
-        std::cerr << "[DrawFrame] first vkQueueSubmit OK (frame=" << CurrentFrameIndex
-            << " image=" << ImageIndex << ")" << std::endl;
-        s_FirstSubmitLogged = true;
-    }
     // Present using the current image index, which tells vulkan which image to put on screen
     VkPresentInfoKHR PresentInfo{};
     PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -213,17 +197,6 @@ const Layout::ViewportRect& Viewport)
     PresentInfo.swapchainCount = 1;
     PresentInfo.pSwapchains = &m_VulkanContext.SwapChain;
     VkResult PresentResult = vkQueuePresentKHR(m_VulkanContext.PresentQueue, &PresentInfo);
-    if (PresentResult != VK_SUCCESS && PresentResult != VK_SUBOPTIMAL_KHR)
-    {
-        std::cerr << "[DrawFrame] vkQueuePresentKHR failed: VkResult=" << PresentResult
-            << " frame=" << CurrentFrameIndex << " image=" << ImageIndex << std::endl;
-    }
-    else if (!s_FirstPresentLogged)
-    {
-        std::cerr << "[DrawFrame] first vkQueuePresentKHR OK (frame=" << CurrentFrameIndex
-            << " image=" << ImageIndex << ")" << std::endl;
-        s_FirstPresentLogged = true;
-    }
     // Advance the frame counter
     m_VulkanContext.CurrentFrame = (CurrentFrameIndex + 1) % VulkanContext::MAX_FRAMES_IN_FLIGHT;
 }
@@ -503,7 +476,7 @@ bool VulkanManager::PickPhysicalDevice()
      * Note: We check B8G8R8A8_SRGB here because the swapchain format isn't selected yet.
      * After create_swapchain(), verify ctx.swapchain_format also supports blit
      * if it ends up being a different format (e.g., the SRGB fallback path). */
-    CheckBlitSupport(m_VulkanContext.VulkanPhysicalDevice, VK_FORMAT_B8G8R8A8_SRGB);
+    CheckBlitSupport(m_VulkanContext.VulkanPhysicalDevice, VK_FORMAT_B8G8R8A8_UNORM);
 
     return true;
 }
@@ -620,7 +593,7 @@ bool VulkanManager::CreateSwapChain()
     VkSurfaceFormatKHR SurfaceFormat = Formats[0];
     for (const VkSurfaceFormatKHR& Format : Formats)
     {
-        if (Format.format == VK_FORMAT_B8G8R8A8_SRGB && Format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        if (Format.format == VK_FORMAT_B8G8R8A8_UNORM && Format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
         {
             SurfaceFormat = Format;
             break;
@@ -1904,7 +1877,7 @@ bool VulkanManager::CreateShaderModule(const std::vector<char>& InShaderBuffer, 
 }
 
 void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t CurrentFrame, uint32_t ImageIndex,
-    uint32_t InstanceCount, VkBuffer VertexBuffer, const PushConstantType &PushConstantData, const Commons::Layout::ViewportRect& Viewport)
+    uint32_t InstanceCount, VkBuffer VertexBuffer, const PushConstantType &PushConstantData, const Layout::ViewportRect& Viewport)
 {
     using namespace Commons;
     VkCommandBufferBeginInfo CommandBufferBeginInfo = {};

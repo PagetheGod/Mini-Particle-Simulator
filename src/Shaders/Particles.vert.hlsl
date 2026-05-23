@@ -89,7 +89,7 @@ VertexOutput main(VertexInput Input, uint InstanceID : SV_InstanceID)
     // Transform the vertex coordinate to clip space using the view projection matrix
     // HLSL uses row-major order, so multiplication goes from left to right
     WorldPos = mul(WorldPos, PushConstants.ViewProjection);
-
+    WorldPos.y = -WorldPos.y;
     Output.Position = WorldPos;
     Output.FragmentColor = InstanceColor;
     /*

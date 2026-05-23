@@ -145,11 +145,6 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 		{
 			m_Camera2D->OnViewportResized(Layout::GetViewportRect(m_UIManager->IsPanelOpen()));
 		}
-		else
-		{
-			m_Camera->AdjustCameraForResize(Layout::GetViewportRect(IsPanelOpen),
-				Layout::GetViewportRect(m_UIManager->IsPanelOpen()));
-		}
 
 	}
 	else if (Input.Event == InputEvent::CameraPan)
@@ -249,6 +244,7 @@ bool Application::ShowStartupDialog()
 	// ── Step 2: Initialize ImGui with SDL_Renderer backend ──
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+	SetUIandFontScale();
 	ImGuiIO& ImGuiIO = ImGui::GetIO();
 	// Disable imgui.ini file — we don't want to save layout state
 	// for a temporary dialog.
@@ -356,7 +352,7 @@ bool Application::ShowStartupDialog()
 
 		// Render
 		ImGui::Render();
-		SDL_SetRenderDrawColor(Renderer, 25, 25, 30, 255);
+		SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 255);
 		SDL_RenderClear(Renderer);
 		ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), Renderer);
 		SDL_RenderPresent(Renderer);
@@ -376,7 +372,6 @@ void Application::SetUIandFontScale()
 {
     // Initialize ImGui. We are not setting the IniFileName to nullptr because in this case
     // we do want to save the layout state since this is a persistent ui
-    IMGUI_CHECKVERSION();
     ImGuiIO& ImGuiIO = ImGui::GetIO();
     ImGuiIO.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable full keyboard inputs(enter, tab, space, etc)
 
