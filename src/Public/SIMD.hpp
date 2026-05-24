@@ -1,6 +1,6 @@
 ﻿
-#ifndef MINIPARTICLESIMULATOR_SIMD_HPP
-#define MINIPARTICLESIMULATOR_SIMD_HPP
+#pragma once
+
 #include <cstdint>
 
 /*
@@ -16,7 +16,8 @@ enum class SIMDLevel : uint8_t
     Scalar,
     SSE2, // 128-bit, process 4 floats at a time. This should be guaranteed on all x64 CPUs
     AVX2, // 256-bit, process 8 floats at a time
-    AVX512 // 512-bit, process 16 floats at a time
+    AVX512, // 512-bit, process 16 floats at a time
+    NEON // 128-bit, for ARM NEON
 };
 
 class SIMDManager
@@ -37,18 +38,20 @@ private:
 #if defined(__x86_64__) || defined(_M_X64)
     // x86-specific helper used by the CPUID-based detection path.
     void QueryCPUInfo(int LeafNumber, int SubleafNumber, uint32_t& Eax, uint32_t& Ebx, uint32_t& Ecx, uint32_t& Edx);
-#endif
+    SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
+    // For NEON and other types of architectures, we don't need or define the above functions
+    // Just set the width to the specific value
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    SIMDLevel m_SIMDLevel = SIMDLevel::NEON;
+#else
     SIMDLevel m_SIMDLevel = SIMDLevel::Scalar;
+#endif
 };
 
 // Everything below this point is x86-64 only
-// On ARM (Apple Silicon), we fall back to scalar code paths
-// The compiler's auto-vectorization will handle NEON on ARM
 #if defined(__x86_64__) || defined(_M_X64)
-
 // For both SIMD intrinsics and XGETBV to check OS support for SIMD
 #include <immintrin.h>
-
 /*
  * Using explicit template specialization to provide SIMD traits for different levels
  * This saves us the trouble of writing multiple versions or ifdefs for different SIMD levels
@@ -296,7 +299,109 @@ struct SIMDTraits<SIMDLevel::AVX512>
         return _mm512_min_ps(Lhs, Rhs);
     }
 };
-
 #endif // defined(__x86_64__) || defined(_M_X64)
+#if defined(__aarch64__) || defined(_M_ARM64)
+#include <arm_neon.h>
+// ARM NEON intrinsics. NEON seems to only support up to 128-bit wide operations
+// NEON intrinsics naturally tolerates unaligned operations
+template<>
+struct SIMDTraits<SIMDLevel::NEON>
+{
+    static constexpr uint32_t SIMDWidth = 4;
+    // NOT The poly128_t type, that's for crypto!
+    static float32x4_t VectorizedLoad(const float* SrcPtr)
+    {
+        return vld1q_f32(SrcPtr);
+    }
+    // Set all of the wide register lanes to a single value(broadcast)
+    static float32x4_t VectorizedBroadcast(const float& Val)
+    {
+        return vdupq_n_f32(Val);
+    }
+    /*
+     * NEON has no dedicated "set lanes to zero" intrinsic. Broadcasting 0 is the
+     * conventional idiom — the compiler pattern-matches this to a single MOVI #0
+     * instruction (no actual splat is emitted)
+     */
+    static float32x4_t VectorizedZero()
+    {
+        return vdupq_n_f32(0.f);
+    }
+    // Store 4/8/16 floats, using the unaligned variant for the same reason above
+    static void VectorizedStore(float* DstPtr, float32x4_t SrcVector)
+    {
+        vst1q_f32(DstPtr, SrcVector);
+    }
+    // Add two register element by element, basically adding the contents of two 4-float wide register
+    static float32x4_t VectorizedAdd(float32x4_t Lhs, float32x4_t Rhs)
+    {
+        return vaddq_f32(Lhs, Rhs);
+    }
+    // Subtract two register element by element
+    static float32x4_t VectorizedSub(float32x4_t Lhs, float32x4_t Rhs)
+    {
+        return vsubq_f32(Lhs, Rhs);
+    }
+    // Multiply two register element by element
+    static float32x4_t VectorizedMul(float32x4_t Lhs, float32x4_t Rhs)
+    {
+        return vmulq_f32(Lhs, Rhs);
+    }
+    // Per-lane divide. AArch64-only intrinsic — ARMv7-A NEON has no vector divide
+    static float32x4_t VectorizedDiv(float32x4_t Lhs, float32x4_t Rhs)
+    {
+        return vdivq_f32(Lhs, Rhs);
+    }
+    /*
+     * Reciprocal sqrt — NOT a 1:1 translation of _mm*_rsqrt_ps.
+     *
+     * NEON's vrsqrteq_f32 is only an ~8-bit estimate (the "e" in the name is for
+     * "estimate"), versus ~12 bits on SSE/AVX and 14 bits on AVX512. Using the
+     * raw estimate would let particle velocities drift noticeably more on ARM
+     * than on x86.
+     * To close that gap we apply one Newton-Raphson refinement step using NEON's
+     * dedicated helper vrsqrtsq_f32, which internally computes (3 - a*b) / 2 —
+     * exactly the term the NR iteration needs. The recurrence:
+     *     x_{n+1} = x_n * vrsqrts(input, x_n * x_n)
+     * After one step we land at ~16-bit precision (better than SSE/AVX rsqrt) at
+     * the cost of one extra mul + one rsqrt-step op. If this ever shows up hot in
+     * a profile, dropping the refinement is fine, but it would lead less accurate visuals
+     */
+    static float32x4_t VectorizedRSqrt(float32x4_t SrcVector)
+    {
+        float32x4_t Est = vrsqrteq_f32(SrcVector);
+        Est = vmulq_f32(Est, vrsqrtsq_f32(SrcVector, vmulq_f32(Est, Est)));
+        return Est;
+    }
 
-#endif //MINIPARTICLESIMULATOR_SIMD_HPP
+    /*
+     * Bitwise AND. NEON has no vandq_f32, bitwise ops only exist on integer-typed
+     * vector types. We reinterpret-cast through uint32x4_t to keep the float-in /
+     * float-out interface symmetric with the x86 specializations. The
+     * vreinterpretq_* intrinsics are zero-cost: they only re-tag the register for
+     * the C compiler, no instruction is emitted
+     */
+    static float32x4_t VectorizedAnd(float32x4_t Lhs, float32x4_t Rhs)
+    {
+        return vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(Lhs),
+            vreinterpretq_u32_f32(Rhs)));
+    }
+
+    /*
+     * Per-lane max. NEON follows IEEE-754 maxNum (NaN treated as missing, non-NaN
+     * operand wins). SSE's _mm_max_ps returns the 2nd operand on any NaN. Behaves
+     * identically across platforms whenever inputs are finite, which is the only
+     * case our particle math produces
+     */
+    static float32x4_t VectorizedMax(float32x4_t Lhs, float32x4_t Rhs)
+    {
+        return vmaxq_f32(Lhs, Rhs);
+    }
+    // Per-lane min. Same IEEE-754 minNum vs SSE NaN caveat as Max
+    static float32x4_t VectorizedMin(float32x4_t Lhs, float32x4_t Rhs)
+    {
+        return vminq_f32(Lhs, Rhs);
+    }
+};
+#endif
+

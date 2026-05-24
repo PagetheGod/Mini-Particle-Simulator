@@ -30,6 +30,11 @@ HardwareRenderer::~HardwareRenderer()
         vkDeviceWaitIdle(m_VulkanContextPtr->VulkanDevice);
     }
     // Destroy in reversed order
+    if (m_VertexBuffer.VulkanBuffer)
+    {
+        m_VulkanManager->DestroyBuffer(m_VertexBuffer);
+    }
+
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     m_VulkanContextPtr = nullptr;

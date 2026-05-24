@@ -14,7 +14,6 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 // For debug/validation layer
-static constexpr bool ENABLE_VALIDATION_LAYERS = true;
 const std::vector<const char*> VALIDATION_LAYERS = {
     "VK_LAYER_KHRONOS_validation"
 };

@@ -35,7 +35,7 @@ bool VulkanManager::Initialize(SDL_Window* InWindow)
         return Result;
     }
     // Set up debug messenger if we are enabling debug layer
-    if (ENABLE_VALIDATION_LAYERS)
+#ifdef ENABLE_DEBUG_LAYER
     {
         Result = SetupDebugMessenger();
         if (!Result)
@@ -44,6 +44,7 @@ bool VulkanManager::Initialize(SDL_Window* InWindow)
             return Result;
         }
     }
+#endif
     // Create the surface
     Result = CreateSurface();
     if (!Result)
@@ -186,7 +187,7 @@ const Layout::ViewportRect& Viewport)
     // RenderFinishedSemaphore is indexed by ImageIndex (per swapchain image),
     // not by frame-in-flight — see CreateSyncObjects for rationale.
     SubmitInfo.pSignalSemaphores = &m_VulkanContext.RenderFinishedSemaphores[ImageIndex];
-    VkResult SubmitResult = vkQueueSubmit(m_VulkanContext.GraphicsQueue, 1, &SubmitInfo,
+    vkQueueSubmit(m_VulkanContext.GraphicsQueue, 1, &SubmitInfo,
         m_VulkanContext.InFlightFence[CurrentFrameIndex]);
     // Present using the current image index, which tells vulkan which image to put on screen
     VkPresentInfoKHR PresentInfo{};
@@ -196,7 +197,7 @@ const Layout::ViewportRect& Viewport)
     PresentInfo.pImageIndices = &ImageIndex;
     PresentInfo.swapchainCount = 1;
     PresentInfo.pSwapchains = &m_VulkanContext.SwapChain;
-    VkResult PresentResult = vkQueuePresentKHR(m_VulkanContext.PresentQueue, &PresentInfo);
+    vkQueuePresentKHR(m_VulkanContext.PresentQueue, &PresentInfo);
     // Advance the frame counter
     m_VulkanContext.CurrentFrame = (CurrentFrameIndex + 1) % VulkanContext::MAX_FRAMES_IN_FLIGHT;
 }
@@ -205,12 +206,13 @@ const Layout::ViewportRect& Viewport)
 bool VulkanManager::CreateInstance()
 {
     // Step 1: Check validation layer support
-    if (ENABLE_VALIDATION_LAYERS && !CheckValidationLayers())
+#ifdef ENABLE_DEBUG_LAYER
+    if (!CheckValidationLayers())
     {
         std::cerr << "WARNING: Validation layers requested but not available.\n" <<
             "Install the Vulkan SDK to get them. Continuing without validation.\n";
     }
-
+#endif
     // Step 2: Fill in the application info
     // This struct is technically optional but good practice. Some drivers
     // use the engine name/version for driver-specific optimizations.
@@ -240,11 +242,11 @@ bool VulkanManager::CreateInstance()
     // Add the debug utils extension if we're using validation layers.
     // This extension provides the VkDebugUtilsMessengerEXT object that
     // receives validation messages.
-    if (ENABLE_VALIDATION_LAYERS)
+#ifdef ENABLE_DEBUG_LAYER
     {
         Extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
-
+#endif
     // Print what we're enabling (helpful for debugging setup issues)
     std::cout << "Vulkan instance extensions: " << Extensions.size() << '\n';
     for (const char* Ext : Extensions)
@@ -262,28 +264,24 @@ bool VulkanManager::CreateInstance()
     // The pNext chain below also hooks the debug messenger into instance
     // creation/destruction, so validation errors during those calls are caught.
     VkDebugUtilsMessengerCreateInfoEXT DebugCreateInfo{};
-    if (ENABLE_VALIDATION_LAYERS)
-    {
-        CreateInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
-        CreateInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
-
-        // Set up a temporary debug messenger for instance creation.
-        // Without this, errors during vkCreateInstance itself wouldn't
-        // be caught by the debug messenger (because it doesn't exist yet).
-        DebugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        DebugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        DebugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-            | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-            | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        DebugCreateInfo.pfnUserCallback = DebugCallback;
-        // Chain the debug messenger into the instance creation
-        CreateInfo.pNext = &DebugCreateInfo;
-    }
-    else
-    {
-        CreateInfo.enabledLayerCount = 0;
-        CreateInfo.ppEnabledLayerNames = nullptr;
-    }
+#ifdef ENABLE_DEBUG_LAYER
+    CreateInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
+    CreateInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
+    // Set up a temporary debug messenger for instance creation.
+    // Without this, errors during vkCreateInstance itself wouldn't
+    // be caught by the debug messenger (because it doesn't exist yet).
+    DebugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    DebugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    DebugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+        | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+        | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    DebugCreateInfo.pfnUserCallback = DebugCallback;
+    // Chain the debug messenger into the instance creation
+    CreateInfo.pNext = &DebugCreateInfo;
+#else
+    CreateInfo.enabledLayerCount = 0;
+    CreateInfo.ppEnabledLayerNames = nullptr;
+#endif
     // Step 5: Create the instance
     const VkResult Result = vkCreateInstance(&CreateInfo, nullptr, &m_VulkanContext.VulkanInstance);
 
@@ -316,11 +314,6 @@ bool VulkanManager::CreateInstance()
 
 bool VulkanManager::SetupDebugMessenger()
 {
-    if constexpr (!ENABLE_VALIDATION_LAYERS)
-    {
-        return true;
-    }
-
     VkDebugUtilsMessengerCreateInfoEXT CreateInfo{};
     CreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     CreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
@@ -546,11 +539,10 @@ bool VulkanManager::CreateLogicalDevice()
     CreateInfo.ppEnabledExtensionNames = DEVICE_EXTENSIONS.data();
     CreateInfo.pNext = &Features_1_0;
 
-    if constexpr(ENABLE_VALIDATION_LAYERS)
-    {
-        CreateInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
-        CreateInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
-    }
+#ifdef ENABLE_DEBUG_LAYER
+    CreateInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
+    CreateInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
+#endif
 
     VkResult Result = vkCreateDevice(m_VulkanContext.VulkanPhysicalDevice, &CreateInfo, nullptr,
         &m_VulkanContext.VulkanDevice);
@@ -600,8 +592,9 @@ bool VulkanManager::CreateSwapChain()
         }
     }
 
-    //Choose present mode, we prefer mailbox, fallback to FIFO
+    // Choose present mode, we prefer mailbox, fallback to FIFO
     VkPresentModeKHR PresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    /* Let's try just FIFO, since I heard this is how you do VSYNC in Vulkan
     for (const VkPresentModeKHR& Mode : PresentModes)
     {
         if (Mode == VK_PRESENT_MODE_MAILBOX_KHR)
@@ -609,7 +602,7 @@ bool VulkanManager::CreateSwapChain()
             PresentMode = Mode;
             break;
         }
-    }
+    }*/
 
     //Choose extent - the dimensions of the swapchain image
     VkExtent2D Extent = Capabilities.currentExtent;
@@ -1128,6 +1121,9 @@ bool VulkanManager::CreateGraphicsPipeline()
         std::cerr << "Failed to create graphics pipeline! VkResult: " << vkResult << '\n';
         return false;
     }
+    // Destroy the shader module, these are transient resources that are meant to be destroyed after pipeline setup
+    vkDestroyShaderModule(m_VulkanContext.VulkanDevice, VertexShaderModule, nullptr);
+    vkDestroyShaderModule(m_VulkanContext.VulkanDevice, FragmentShaderModule, nullptr);
 
     return true;
 }
@@ -1626,7 +1622,8 @@ void VulkanManager::CleanUpContext()
     // Logical device
     vkDestroyDevice(m_VulkanContext.VulkanDevice, nullptr);
     // Debug layer if present
-    if (ENABLE_VALIDATION_LAYERS && m_VulkanContext.VulkanDebugMessenger)
+#ifdef ENABLE_DEBUG_LAYER
+    if (m_VulkanContext.VulkanDebugMessenger)
     {
         auto Func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_VulkanContext.VulkanInstance, "vkDestroyDebugUtilsMessengerEXT");
         if (Func)
@@ -1634,6 +1631,7 @@ void VulkanManager::CleanUpContext()
             Func(m_VulkanContext.VulkanInstance, m_VulkanContext.VulkanDebugMessenger, nullptr);
         }
     }
+#endif
     // Surface and vulkan instance
     vkDestroySurfaceKHR(m_VulkanContext.VulkanInstance, m_VulkanContext.VulkanSurface, nullptr);
     vkDestroyInstance(m_VulkanContext.VulkanInstance, nullptr);
@@ -1699,6 +1697,7 @@ void VulkanManager::DestroyParticleInstanceBuffers()
         BufferSet.DescriptorSet = nullptr;
     }
 }
+
 
 QueueFamilyIndices VulkanManager::FindQueueFamilies(VkPhysicalDevice Device, VkSurfaceKHR Surface)
 {

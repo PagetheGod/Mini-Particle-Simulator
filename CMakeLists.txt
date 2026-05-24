@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 4.2.3)
 project(
 	MiniParticleSimulator
 	VERSION 0.1.0
-	DESCRIPTION "A mini, simplified particle simulator."
+	DESCRIPTION "A mini particle simulator."
 	LANGUAGES C CXX
 )
 
@@ -88,15 +88,30 @@ add_executable(${PROJECT_NAME}
         src/Private/Camera2D.cpp
 )
 
-# Architecture detection. Used to gate x86-only SIMD compile flags below.
+# Architecture detection. Only used to gate per-arch compile flags below.
+# Source-level branching between x86 SIMD and ARM NEON lives in the code itself
+# via compiler-defined macros (__x86_64__ / _M_X64, __aarch64__ / _M_ARM64) —
+# the compiler already knows its target arch, so we don't need to forward these
+# CMake variables as preprocessor defines
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64)|(AMD64)|(amd64)")
     set(IS_X86_64 TRUE)
+    set(IS_ARM64 FALSE)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(ARM64)|(arm64)")
+    set(IS_X86_64 FALSE)
+    set(IS_ARM64 TRUE)
 else()
     set(IS_X86_64 FALSE)
+    set(IS_ARM64 FALSE)
+    message(WARNING
+        "Unrecognized architecture '${CMAKE_SYSTEM_PROCESSOR}'. "
+        "SIMD code will fall back to the scalar path."
+    )
 endif()
 
-# SIMD.cpp now provides both x86 detection and scalar fallbacks for ARM.
-# _xgetbv needs -mxsave on the x86 code path for Clang/GCC.
+# Per-arch SIMD compile flags:
+#   x86_64: _xgetbv needs -mxsave on the x86 code path for Clang/GCC.
+#   ARM64:  NEON is mandatory on ARMv8-A and always enabled — no flag needed,
+#           and no equivalent of -mavx2 to gate optional vector ISAs
 if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
 endif()
@@ -159,6 +174,11 @@ target_link_options(${PROJECT_NAME} PRIVATE
 	 $<$<AND:$<CXX_COMPILER_ID:Clang>,$<CONFIG:Release>>:-flto=auto>
 )
 
+# Add the preprocessor definitions for enabling Vulkan debug layer in debug build
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Debug>:ENABLE_DEBUG_LAYER>
+)
+
 # Vulkan and HLSL, find the DXC compiler that comes with vulkan
 find_program(DXC dxc HINTS
 	$ENV{VULKAN_SDK}/Bin
@@ -188,6 +208,7 @@ set(SHADER_OUTPUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Shaders)
 set(SHADER_SOURCES
     ${CMAKE_SOURCE_DIR}/src/Shaders/Particles.vert.hlsl vs_6_4 Particles.vert
     ${CMAKE_SOURCE_DIR}/src/Shaders/Particles.frag.hlsl ps_6_4 Particles.frag
+    # We are not using compute shader for particle updates at the moment
     #${CMAKE_SOURCE_DIR}/src/Shaders/Particles.update.comp.hlsl cs_6_4 Particles_Update.comp
 )
 # Parse the shader list (triplets: source, profile, output_name)

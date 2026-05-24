@@ -184,7 +184,7 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
     {
         // These numbers are kinda arbitrary, might be better to define them in commons.hpp
         // As constants, however, since we are just using them here, it's ok for now
-        IsConfigDirty |= ImGui::SliderInt("Particle Per Second", &Config.EmissionRate, 50, 100'000);
+        IsConfigDirty |= ImGui::SliderInt("Particle Per Second", &Config.EmissionRate, 50, 10000);
     }
 
     // Emitter lifetime - how long will our emitter spawn particles for

@@ -50,7 +50,9 @@ private:
     glm::vec3 m_Up;
     glm::vec3 m_Right;
     glm::vec3 m_Forward;
-    glm::vec3 m_OriginLookAt;
+    // This is where our camera is POINTING AT, it's not the origin of the world
+    // In fact it's shifted a bit upwards so we can view all of the particles easily
+    glm::vec3 m_LookAt;
     float m_RotationSpeedFactor = 0.5f;
     float m_ZoomSpeedFactor = 0.25f;
     float m_Yaw = 180.f;

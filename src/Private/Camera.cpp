@@ -6,7 +6,7 @@
 #include "glm/ext/matrix_transform.hpp"
 using namespace Commons;
 Camera::Camera() : m_Position(glm::vec3(0.0f, 5.0f, -m_OrbitRadius)), m_Up(glm::vec3(0.0f, 1.0f, 0.0f)), m_Right(glm::vec3(1.0f, 0.0f, 0.0f)),
-                   m_Forward(glm::vec3(0.0f, 0.0f, 1.0f)), m_OriginLookAt(glm::vec3(0.f))
+                   m_Forward(glm::vec3(0.0f, 0.0f, 1.0f)), m_LookAt(glm::vec3(0.f, 75.f, 0.f))
 {
 
 }
@@ -18,7 +18,7 @@ void Camera::Orbit(const InputResult& Input)
     m_Yaw += m_RotationSpeedFactor * Input.MouseDelta.x;
     m_Yaw = glm::mod(m_Yaw, 360.f);
     m_Pitch += m_RotationSpeedFactor * (-Input.MouseDelta.y);
-    m_Pitch = glm::clamp(m_Pitch, 0.f, 60.f); // No point looking from below the plane
+    m_Pitch = glm::clamp(m_Pitch, -45.f, 0.f); // No point looking from below the plane
     RecomputePosAndBasis();
 }
 
@@ -32,7 +32,8 @@ void Camera::Zoom(const InputResult& Input)
     m_ZoomX = m_ZoomY / Layout::ASPECT_RATIO;
     m_ZoomX = glm::clamp(m_ZoomX, MIN_ZOOM_X, MAX_ZOOM_X);
 }
-
+// This function is NOT NEEDED for the GPU path, since our vulkan manager already takes care of it
+// However, I am keeping it here for future references
 void Camera::AdjustCameraForResize(const Layout::ViewportRect &OldViewport,
                                    const Layout::ViewportRect &NewViewport)
 {
@@ -80,14 +81,14 @@ void Camera::AdjustCameraForResize(const Layout::ViewportRect &OldViewport,
      *
      */
     const float HalfFovTan = glm::tan(glm::radians(Camera::FIELD_OF_VIEW * 0.5f));
-    const float Distance = glm::length(m_Position - m_OriginLookAt);
+    const float Distance = glm::length(m_Position - m_LookAt);
     const float WorldHeight = 2.f * Distance * HalfFovTan;
     const float AspectRatio = static_cast<float>(OldViewport.Width) / static_cast<float>(OldViewport.Height);
     const float WorldWidth = WorldHeight * AspectRatio;
 
     // Calculate the world-space offset along camera's up and right directions
     const glm::vec3 Offset = m_Right * Dx * WorldWidth + m_Up * Dy * WorldHeight;
-    m_OriginLookAt += Offset;
+    m_LookAt += Offset;
 }
 
 void Camera::SetOrbitRadius(const float InOrbitRadius)
@@ -99,7 +100,7 @@ void Camera::SetOrbitRadius(const float InOrbitRadius)
 void Camera::GetViewMatrix(glm::mat4 &OutViewMatrix) const
 {
     constexpr glm::vec3 WorldUp = glm::vec3(0.f, 1.f, 0.f);
-    OutViewMatrix = glm::lookAtLH(m_Position, m_OriginLookAt, WorldUp);
+    OutViewMatrix = glm::lookAtLH(m_Position, m_LookAt, WorldUp);
 }
 
 void Camera::GetProjectionMatrix(glm::mat4 &OutProjectionMatrix, const float AspectRatio)
@@ -117,10 +118,10 @@ void Camera::RecomputePosAndBasis()
     const float PitchRad = glm::radians(m_Pitch);
     const float CosPitch = glm::cos(PitchRad);
     // X = cos(pitch) * sin(yaw), Y = -sin(pitch), Z = cos(pitch) * cos(yaw)
-    m_Position = m_OriginLookAt + m_OrbitRadius * glm::vec3(CosPitch * glm::sin(YawRad), -glm::sin(PitchRad),
+    m_Position = m_LookAt + m_OrbitRadius * glm::vec3(CosPitch * glm::sin(YawRad), -glm::sin(PitchRad),
         CosPitch * glm::cos(YawRad));
     constexpr glm::vec3 WorldUp = glm::vec3(0.f, 1.f, 0.f);
-    m_Forward = glm::normalize(m_OriginLookAt - m_Position);
+    m_Forward = glm::normalize(m_LookAt - m_Position);
     // World up is "co-planar" with the actual up (off by some translations, which does not affect vectors technically)
     // So we can just use it to get the right vector using cross product
     m_Right = glm::normalize(glm::cross(WorldUp, m_Forward));
