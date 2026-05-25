@@ -186,8 +186,8 @@ struct ParticleStates
 class ParticleManager
 {
 public:
-    //Constructors and destructors
-    ParticleManager() = default;
+    // Constructors and destructors
+    explicit ParticleManager(VThreadPool* InVThreadPool) : m_VThreadPool(InVThreadPool) {}
 
     ParticleManager(const ParticleManager&) = delete;// Same with application class, makes no sense to copy or move
     ParticleManager& operator=(const ParticleManager&) = delete;
@@ -293,7 +293,6 @@ private:
 
 
    // Custom SIMD functions
-#if defined(__x86_64__) || defined(_M_X64)
     template<SIMDLevel Level>
     void SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
         const float Strength, const float Radius, const float DeltaTime);
@@ -301,13 +300,12 @@ private:
     template<SIMDLevel Level>
     void SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
         const float DeltaTime, const glm::vec3& VortexCenter);
-
-#endif
     // Helper to create a float array aligned to specified boundary
     AlignedArray AllocateAlignedArray(size_t NumElements, size_t Alignment);
 private:
     ParticleStates m_ParticleStates;
-    std::unique_ptr<VThreadPool> m_VThreadPool;
+    // Non-owning. Owned and started by Application, injected via the constructor
+    VThreadPool* m_VThreadPool = nullptr;
     SIMDManager m_SIMDManager;
     // States trackers
     uint32_t m_ParticleCount = 0;
@@ -324,7 +322,6 @@ private:
     float m_EmitterLifeTime = 0.f;
     // Constants
     static constexpr uint32_t NUM_MAX_PARTICLES = 100'000;
-    static constexpr uint32_t NUM_THREADS_USED = 16;
     static constexpr float KILL_Y = -1000.f;
 
 };

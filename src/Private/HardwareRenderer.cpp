@@ -15,8 +15,8 @@
 
 
 using namespace Commons;
-HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager) : m_VulkanManager(nullptr), m_Camera(nullptr),
-m_ParticleManager(InParticleManager), m_VulkanContextPtr(nullptr), m_Window(nullptr)
+HardwareRenderer::HardwareRenderer(ParticleManager* InParticleManager,  VThreadPool* InVThreadPool) : m_VulkanManager(nullptr), m_Camera(nullptr),
+m_ParticleManager(InParticleManager), m_VulkanContextPtr(nullptr), m_Window(nullptr), m_VThreadPool(InVThreadPool)
 {
 
 }
@@ -34,7 +34,6 @@ HardwareRenderer::~HardwareRenderer()
     {
         m_VulkanManager->DestroyBuffer(m_VertexBuffer);
     }
-
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     m_VulkanContextPtr = nullptr;
@@ -167,11 +166,20 @@ void HardwareRenderer::UploadParticleData(uint32_t CurrentFrame, const ParticleS
      * queue submissions. Storage buffer reads in the vertex shader of this frame's command buffer (not recorded
      * at this step of the frame) will see the data we just wrote
      */
+    std::array<std::future<void>, 9> Futures;
     for (uint32_t i = 0; i < 9; i++)
     {
-        memcpy(BufferSet.MappedPtr[i], Sources[i], BytesToCopy);
+        auto ReturnedFuture = m_VThreadPool->SubmitTask([&BufferSet, &Sources](const size_t NumBytesToCopy, const uint32_t Index)
+        {
+            memcpy(BufferSet.MappedPtr[Index], Sources[Index], NumBytesToCopy);
+        }, BytesToCopy, i);
+        Futures[i] = std::move(ReturnedFuture);
     }
-
+    for (auto& Future : Futures)
+    {
+        Future.get();
+    }
+    //memcpy(BufferSet.MappedPtr[i], Sources[i], BytesToCopy);
 }
 
 

@@ -84,6 +84,10 @@ namespace Commons
         static constexpr float GRAVITY = 9.81f;
         // Custom epsilon since the one used by GLM is really small
         static constexpr float CUSTOM_EPSILON = 0.00001f;
+        // Worker thread count requested for the shared thread pool. The pool
+        // clamps this down to (hardware_concurrency - 1) internally, so asking
+        // for more than the machine has is safe.
+        static constexpr uint32_t NUM_THREADS_USED = 16;
 
     }
     // There are many hardcoded screen/viewport size constants here

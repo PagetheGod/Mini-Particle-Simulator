@@ -6,7 +6,7 @@
 #include "glm/ext/matrix_transform.hpp"
 using namespace Commons;
 Camera::Camera() : m_Position(glm::vec3(0.0f, 5.0f, -m_OrbitRadius)), m_Up(glm::vec3(0.0f, 1.0f, 0.0f)), m_Right(glm::vec3(1.0f, 0.0f, 0.0f)),
-                   m_Forward(glm::vec3(0.0f, 0.0f, 1.0f)), m_LookAt(glm::vec3(0.f, 75.f, 0.f))
+                   m_Forward(glm::vec3(0.0f, 0.0f, 1.0f)), m_LookAt(glm::vec3(0.f, 70.f, 0.f))
 {
 
 }

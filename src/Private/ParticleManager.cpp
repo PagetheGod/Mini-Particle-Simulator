@@ -39,8 +39,6 @@ void ParticleManager::InitializeParticles()
     m_ParticleStates.LifeTime = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
     m_ParticleStates.MaxLifeTime = AllocateAlignedArray(NUM_MAX_PARTICLES, 64);
 
-    // Start the thread pool, with 16 threads, thread pool already has clamping logics
-    m_VThreadPool = std::make_unique<VThreadPool>(NUM_THREADS_USED, true);
     // Initialize the SIMD manager and get back the SIMD level
     m_SIMDManager = SIMDManager();
     m_SIMDLevel = m_SIMDManager.GetSIMDLevel();
@@ -83,7 +81,7 @@ void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, cons
             NumParticleSpawn = std::min(NUM_MAX_PARTICLES - m_ParticleCount,
                 static_cast<uint32_t>(Config.EmissionRate));
             NumParticlesPerThread = std::ceil(static_cast<float>(NumParticleSpawn) /
-                static_cast<float>(NUM_THREADS_USED));
+                static_cast<float>(Constants::NUM_THREADS_USED));
             // Reset timer
             m_TimeSinceLastBurst = 0.f;
         }
@@ -95,7 +93,7 @@ void ParticleManager::SpawnParticles(const ParticleSimulatorConfig& Config, cons
             static_cast<uint32_t>(std::floor(static_cast<float>(Config.EmissionRate) * DeltaTime)),
             NUM_MAX_PARTICLES - m_ParticleCount);
         NumParticlesPerThread = std::ceil(static_cast<float>(NumParticleSpawn) /
-                static_cast<float>(NUM_THREADS_USED));
+                static_cast<float>(Constants::NUM_THREADS_USED));
     }
     // Dispatch spawn work to the thread pool in chunks
     std::vector<std::future<void>> SpawnFutures;
@@ -179,7 +177,7 @@ void ParticleManager::UpdateParticles(const ParticleSimulatorConfig& Config, flo
      */
 
     const uint32_t NumParticlesPerThread = static_cast<uint32_t>(std::ceil(
-        static_cast<float>(m_ParticleCount) / static_cast<float>(NUM_THREADS_USED)));
+        static_cast<float>(m_ParticleCount) / static_cast<float>(Constants::NUM_THREADS_USED)));
 
     // Pre-compute wind influences on the main thread before threaded dispatch
     // ComputeWindInfluence mutates per-force wind timers, so it cannot run per-chunk

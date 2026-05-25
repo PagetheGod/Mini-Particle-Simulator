@@ -19,7 +19,7 @@ class Camera;
 class HardwareRenderer
 {
 public:
-	explicit HardwareRenderer(ParticleManager* InParticleManager);
+	explicit HardwareRenderer(ParticleManager* InParticleManager,  VThreadPool* InVThreadPool);
 	HardwareRenderer(const HardwareRenderer&) = delete;
 	HardwareRenderer& operator=(const HardwareRenderer&) = delete;
 	HardwareRenderer(HardwareRenderer&& ) = delete;

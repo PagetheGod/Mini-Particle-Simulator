@@ -34,7 +34,7 @@ public:
     Application& operator=(const Application&) = delete;
     ~Application();
 
-    //Init and frame function
+    // Init and frame function
     bool Initialize();
     void Run();
     bool Frame(const DeltaTimeData& InDeltaTimeData, const InputResult& Input);
@@ -54,6 +54,10 @@ private:
 private:
     SDL_Window* m_Window;
     RendererType m_RendererType;
+    // Declared before the renderers and the particle manager on purpose: they
+    // borrow it via raw pointers, so the owner must be destroyed AFTER them.
+    // Members destroy in reverse declaration order, so first-declared = last-destroyed.
+    std::unique_ptr<VThreadPool> m_VThreadPool;
     std::unique_ptr<SoftwareRenderer> m_SoftwareRenderer;
     std::unique_ptr<HardwareRenderer> m_HardwareRenderer;
     std::unique_ptr<UIManager> m_UIManager;
@@ -72,7 +76,7 @@ private:
     ParticleSimulatorConfig m_ParticleConfig;
     // Constants
     // How long would we play the entire scene until we stop or loop
-    static constexpr float PLAYBACK_DURATION = 10.f;
+    static constexpr float PLAYBACK_DURATION = 15.f;
 };
 
 

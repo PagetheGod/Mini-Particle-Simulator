@@ -16,7 +16,7 @@
 #include "ParticleManager.hpp"
 using namespace Commons;
 
-Application::Application() : m_Window(nullptr), m_RendererType(RendererType::Software),
+Application::Application() : m_Window(nullptr), m_RendererType(RendererType::Software), m_VThreadPool(nullptr),
 m_SoftwareRenderer(nullptr), m_HardwareRenderer(nullptr), m_UIManager(nullptr), m_ParticleManager(nullptr),
 m_InputManager(InputManager()), m_Camera2D(nullptr), m_Camera(nullptr)
 {
@@ -25,9 +25,18 @@ m_InputManager(InputManager()), m_Camera2D(nullptr), m_Camera(nullptr)
 
 Application::~Application()
 {
-	// Trigger the vulkan destruction logics first by calling reset()
-	// Because if we destroy the window(the surface for vulkan) before vulkan, things will explode
+	/* Both renderers own ImGui backends (the SDL3 platform backend plus a
+	 * renderer backend). Those MUST be shut down before ImGui::DestroyContext(),
+	 * or DestroyContext asserts on a still-registered backend. reset() runs the
+	 * active renderer's destructor (which calls the ImGui_Impl*_Shutdown pair)
+	 * here in the body, rather than later during member destruction — which
+	 * happens after this body returns, i.e. after DestroyContext.
+	 *Hardware also has the Vulkan-before-window ordering constraint: if we
+	 * destroy the window (the Vulkan surface) before Vulkan, things explode.
+	 * reset() on a null unique_ptr is a safe no-op, so resetting both is fine.
+	 */
 	m_HardwareRenderer.reset();
+	m_SoftwareRenderer.reset();
 	ImGui::DestroyContext();
     SDL_DestroyWindow(m_Window);
     SDL_Quit();
@@ -63,14 +72,17 @@ bool Application::Initialize() {
 	{
 		this->m_ShouldLoop = SetLoopEnable;
 	});
-
-	// Construct the particle manager
-	m_ParticleManager = std::make_unique<ParticleManager>();
+	// Start the thread pool. Owned here and shared with the particle manager and
+	// hardware renderer below
+	m_VThreadPool = std::make_unique<VThreadPool>(Constants::NUM_THREADS_USED, true);
+	// Construct the particle manager, handing it a borrowed pointer to the pool
+	m_ParticleManager = std::make_unique<ParticleManager>(m_VThreadPool.get());
 
 	// Create imgui context regardless of which renderer we choose
 	ImGui::CreateContext();
 	// Set up the UI and font scales for both software and hardware renderer
 	SetUIandFontScale();
+
 	// Init the renderer of the user's choice
 	if (m_RendererType == RendererType::Software)
 	{
@@ -95,7 +107,7 @@ bool Application::Initialize() {
 			Utility::ShowError("Hardware Renderer", "Failed to get Vulkan extensions: %s", SDL_GetError());
 			return Result;
 		}
-		m_HardwareRenderer = std::make_unique<HardwareRenderer>(m_ParticleManager.get());
+		m_HardwareRenderer = std::make_unique<HardwareRenderer>(m_ParticleManager.get(), m_VThreadPool.get());
 		Result = m_HardwareRenderer->Initialize(m_Window);
 		if (!Result)
 		{
@@ -231,7 +243,7 @@ bool Application::ShowStartupDialog()
 	SDL_Renderer* Renderer = SDL_CreateRenderer(m_Window, "software");
 	if (!Renderer)
 	{
-		std::printf("Failed to create renderer for startup dialog: %s\n",
+		Utility::ShowError("Initalization Error", "Failed to create renderer for startup dialog: %s\n",
 			SDL_GetError());
 		// If we can't even create a software renderer, default to software
 		// mode (it will fail later too, but at least we tried).
@@ -308,8 +320,7 @@ bool Application::ShowStartupDialog()
 
 		    ImGui::Text("Software Renderer (SDL3 built in)");
 		    ImGui::BulletText("Uses CPU for particle rendering");
-		    ImGui::BulletText("Handles ~10K-30K particles at 60 FPS");
-		    ImGui::BulletText("Works on any machine, no GPU required");
+		    ImGui::BulletText("Will most likely be slower than dedicated GPUs");
 		    ImGui::Spacing();
 
 			// Creates a button that has the label "Select Software" and a size of 280 x 40
@@ -328,7 +339,6 @@ bool Application::ShowStartupDialog()
 
 		    ImGui::Text("GPU Renderer (Vulkan)");
 		    ImGui::BulletText("Uses GPU for particle rendering");
-		    ImGui::BulletText("Handles ~50K-200K particles at 60 FPS");
 		    ImGui::BulletText("Requires a Vulkan-capable GPU");
 		    ImGui::Spacing();
 
