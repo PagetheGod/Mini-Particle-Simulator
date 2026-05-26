@@ -5,6 +5,11 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 
+#ifdef _MSC_VER
+#define restrict __restrict
+#else
+#define restrict __restrict__
+#endif
 
 #include "Commons.hpp"
 #include "VThreadPool.hpp"
@@ -321,7 +326,7 @@ private:
     float m_TimeSinceLastBurst = 0.f;
     float m_EmitterLifeTime = 0.f;
     // Constants
-    static constexpr uint32_t NUM_MAX_PARTICLES = 100'000;
+    static constexpr uint32_t NUM_MAX_PARTICLES = 150'000;
     static constexpr float KILL_Y = -1000.f;
 
 };

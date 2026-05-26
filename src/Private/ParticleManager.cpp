@@ -7,11 +7,6 @@
 #include "glm/gtc/constants.hpp"
 
 #include "ParticleManager.hpp"
-#ifdef _MSC_VER
-#define restrict __restrict
-#else
-#define restrict __restrict__
-#endif
 
 
 using namespace Commons;

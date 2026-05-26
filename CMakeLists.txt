@@ -86,6 +86,11 @@ add_executable(${PROJECT_NAME}
         src/Private/VThreadPool.cpp
         src/Public/ParticlePresets.hpp
         src/Private/Camera2D.cpp
+        src/Private/ParticleMath_SSE2.cpp
+        src/Private/ParticleMath_AVX2.cpp
+        src/Private/ParticleMath_NEON.cpp
+        src/Public/ParticleMath_Shared.h
+        src/Private/ParticleMath_Shared.cpp
 )
 
 # Architecture detection. Only used to gate per-arch compile flags below.
@@ -114,6 +119,18 @@ endif()
 #           and no equivalent of -mavx2 to gate optional vector ISAs
 if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     set_source_files_properties(src/Private/SIMD.cpp PROPERTIES COMPILE_FLAGS "-mxsave")
+endif()
+
+# The AVX2 translation unit must be built with AVX2 (+FMA) so its explicit
+# instantiations actually emit 256-bit code — both the hand-written intrinsics and
+# the auto-vectorized simple kernels. Isolated to this ONE file so the optimizer
+# can't leak AVX2 instructions into baseline code that runs before the runtime
+# CPU-feature check. SSE2 needs no flag (baseline on x86-64); NEON needs none
+# (mandatory on ARMv8-A).
+if(IS_X86_64 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    set_source_files_properties(src/Private/ParticleMath_AVX2.cpp PROPERTIES COMPILE_FLAGS "-mavx2 -mfma")
+elseif(IS_X86_64 AND MSVC)
+    set_source_files_properties(src/Private/ParticleMath_AVX2.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX2")
 endif()
 
 
