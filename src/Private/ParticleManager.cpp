@@ -1,13 +1,9 @@
-﻿//
-// Created by YWvin on 2026/3/23.
-//
-
-
-#include <iostream>
+﻿#include <iostream>
 #include "glm/gtc/constants.hpp"
 
+// Own headers
 #include "ParticleManager.hpp"
-
+#include "ParticleMath_Shared.h"
 
 using namespace Commons;
 
@@ -432,6 +428,34 @@ void ParticleManager::SolvePointForce(uint32_t StartParticleIndex, uint32_t Coun
         VelY[i] += PointInfluence * DeltaY;
         VelZ[i] += PointInfluence * DeltaZ;
     }
+}
+
+void ParticleManager::DispatchSolveForce(uint32_t StartParticleIndex, uint32_t Count,
+    const ForceConfig& ForceConfigData, float DeltaTime, const glm::vec3* WindInfluences)
+{
+    // We choose to guard the different architectures here once instead of switch-case in every single force solver
+    // Less code and easier to read
+#if defined(__x86_64__) || defined(_M_X64)
+    // No need for switch-case here since we only really supports two options, avx2 or sse2
+    // Not supporting AVX512 because it's a lot newer, and doesn't always bring improvements
+    // but it can easily added in the future
+    if (m_SIMDLevel == SIMDLevel::AVX2)
+    {
+        SolveForces<SIMDLevel::AVX2>(StartParticleIndex, Count, ForceConfigData, DeltaTime, WindInfluences);
+    }
+    else
+    {
+        SolveForces<SIMDLevel::SSE2>(StartParticleIndex, Count, ForceConfigData, DeltaTime, WindInfluences);
+    }
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    SolveForces<SIMDLevel::NEON>(StartParticleIndex, Count, ForceConfigData, DeltaTime, WindInfluences);
+#endif
+}
+
+template <SIMDLevel Level>
+void ParticleManager::SolveForces(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
+    float DeltaTime, const glm::vec3* WindInfluences)
+{
 }
 
 void ParticleManager::UpdateParticleLifeTime(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime)
@@ -865,8 +889,63 @@ void ParticleManager::UpdateParticleColor(const uint32_t StartParticleIndex, con
         m_ParticleStates.B[i] = StartColor.b * ScaledLifeTime + EndColor.b * InverseLifeTime;
     }
 }
+template <SIMDLevel Level>
+void ParticleManager::DispatchGravitySolver(uint32_t StartParticleIndex, uint32_t Count, float GravityScale,
+    float DeltaTime)
+{
+    ParticleMath::SolveGravity<Level>(StartParticleIndex, Count, GravityScale, DeltaTime, m_ParticleStates);
+}
 
+template <SIMDLevel Level>
+void ParticleManager::DispatchDragSolver(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient,
+    const float DeltaTime)
+{
+    ParticleMath::SolveGravity<Level>(StartParticleIndex, Count, DragCoefficient, DeltaTime, m_ParticleStates);
+}
+
+template <SIMDLevel Level>
+void ParticleManager::DispatchWindSolver(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence)
+{
+    ParticleMath::SolveWind<Level>(StartParticleIndex, Count, WindInfluence, m_ParticleStates);
+}
+
+template <SIMDLevel Level>
+void ParticleManager::DispatchVortexSolver(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength,
+    const float VortexPull, const float DeltaTime, const glm::vec3& VortexCenter)
+{
+    ParticleMath::SolveVortex<Level>(StartParticleIndex, Count, VortexStrength, VortexPull, DeltaTime,
+        VortexCenter, m_ParticleStates);
+}
+
+template <SIMDLevel Level>
+void ParticleManager::DispatchPointSolver(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
+        const float Strength, const float Radius, const float DeltaTime)
+{
+    ParticleMath::SolvePointForce<Level>(StartParticleIndex, Count, ForcePosition, Strength, Radius, DeltaTime, m_ParticleStates);
+}
+
+template <SIMDLevel Level>
+void ParticleManager::DispatchLifeTimeUpdate(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime)
+{
+    ParticleMath::UpdateParticleLifeTime<Level>(StartParticleIndex, Count, DeltaTime, m_ParticleStates);
+}
+
+template <SIMDLevel Level>
+void ParticleManager::DispatchColorUpdate(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor,
+    const glm::vec3& EndColor)
+{
+    ParticleMath::UpdateParticleColor<Level>(StartParticleIndex, Count, StartColor, EndColor, m_ParticleStates);
+}
+
+template <SIMDLevel Level>
+void ParticleManager::DispatchPositionUpdate(float* StartParticlePtr, uint32_t Count, const float* Velocity,
+    float DeltaTime)
+{
+    ParticleMath::UpdateParticlePositionForAxis<Level>(StartParticlePtr, Count, Velocity, DeltaTime, m_ParticleStates);
+}
 #if defined(__x86_64__) || defined(_M_X64)
+
+
 /*
  * I decided to add custom SIMD implementations of point and vortex force solvers
  * because after pasting our scalar versions into godbolt

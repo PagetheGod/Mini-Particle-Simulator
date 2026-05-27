@@ -16,11 +16,11 @@ namespace ParticleMath
     template void SolveDrag<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient, const float DeltaTime, float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
     template void UpdateParticleColor<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor, const glm::vec3& EndColor, ParticleStates& ParticleStateRef, float* restrict ParticleR, float* restrict ParticleG, float* restrict ParticleB);
     template void UpdateParticleLifeTime<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime, ParticleStates& ParticleStateRef);
-    template void UpdateParticlePositionForAxis_Scalar<SIMDLevel::AVX2>(float* restrict StartParticlePtr, uint32_t Count, const float* restrict Velocity, float DeltaTime);
+    template void UpdateParticlePositionForAxis<SIMDLevel::AVX2>(float* restrict StartParticlePtr, uint32_t Count, const float* restrict Velocity, float DeltaTime);
     // Custom SIMD kernels — these genuinely dispatch through SIMDTraits<AVX2> intrinsics
-    template void SolvePointForce_Vector<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition, const float Strength,
+    template void SolvePointForce<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition, const float Strength,
         const float Radius, const float DeltaTime, ParticleStates& ParticleStateRef);
-    template void SolveVortex_Vector<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength,
+    template void SolveVortex<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength,
         const float VortexPull, const float DeltaTime, const glm::vec3& VortexCenter, ParticleStates& ParticleStateRef);
 }
 #endif

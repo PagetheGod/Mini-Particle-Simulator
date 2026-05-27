@@ -5,6 +5,7 @@
 #include "InputManager.hpp"
 #include "SoftwareRenderer.hpp"
 #include "UIManager.hpp"
+#include "SIMD.hpp"
 
 /*
 * This class will handle the GUI application, including:
@@ -16,7 +17,6 @@
 class Camera;
 class ParticleManager;
 class HardwareRenderer;
-class UIManager;
 
 enum class RendererType : uint8_t
 {
@@ -65,6 +65,7 @@ private:
     InputManager m_InputManager; // Actual instance not a ptr because it's small
     Camera2D* m_Camera2D; // Raw ptr because we do not own it
     Camera* m_Camera;
+    SIMDManager m_SIMDManager;
 
     // States
     bool m_Paused = true;

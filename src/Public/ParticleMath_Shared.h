@@ -31,9 +31,12 @@ namespace ParticleMath
      * So: one extern-template-declaration per (kernel x level) here, one explicit
      * instantiation-definition per level in the matching ISA .cpp.
      */
-    extern template void SolveGravity<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime, ParticleStates& ParticleStateRef);
-    extern template void SolveGravity<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime, ParticleStates& ParticleStateRef);
-    extern template void SolveGravity<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime, ParticleStates& ParticleStateRef);
+    extern template void SolveGravity<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, float GravityScale,
+        float DeltaTime, ParticleStates& ParticleStateRef);
+    extern template void SolveGravity<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, float GravityScale,
+        float DeltaTime, ParticleStates& ParticleStateRef);
+    extern template void SolveGravity<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, float GravityScale,
+        float DeltaTime, ParticleStates& ParticleStateRef);
     template<SIMDLevel Level>
     void SolveWind(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence, float* restrict ParticleVelX,
         float* restrict ParticleVelY, float* restrict ParticleVelZ)
@@ -46,9 +49,12 @@ namespace ParticleMath
             ParticleVelZ[i] += WindInfluence.z;
         }
     }
-    extern template void SolveWind<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence, float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
-    extern template void SolveWind<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence, float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
-    extern template void SolveWind<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence, float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
+    extern template void SolveWind<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence,
+        float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
+    extern template void SolveWind<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence,
+        float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
+    extern template void SolveWind<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence,
+        float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
     template<SIMDLevel Level>
     void SolveDrag(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient, const float DeltaTime, float* restrict ParticleVelX,
     float* restrict ParticleVelY, float* restrict ParticleVelZ)
@@ -64,9 +70,12 @@ namespace ParticleMath
             ParticleVelZ[i] *= DragInfluence;
         }
     }
-    extern template void SolveDrag<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient, const float DeltaTime, float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
-    extern template void SolveDrag<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient, const float DeltaTime, float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
-    extern template void SolveDrag<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient, const float DeltaTime, float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
+    extern template void SolveDrag<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient, const float DeltaTime,
+        float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
+    extern template void SolveDrag<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient, const float DeltaTime,
+        float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
+    extern template void SolveDrag<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient, const float DeltaTime,
+        float* restrict ParticleVelX, float* restrict ParticleVelY, float* restrict ParticleVelZ);
     template<SIMDLevel Level>
     void UpdateParticleColor(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor,
         const glm::vec3& EndColor, ParticleStates& ParticleStateRef, float* restrict ParticleR, float* restrict ParticleG, float* restrict ParticleB)
@@ -83,9 +92,12 @@ namespace ParticleMath
             ParticleB[i] = StartColor.b * ScaledLifeTime + EndColor.b * InverseLifeTime;
         }
     }
-    extern template void UpdateParticleColor<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor, const glm::vec3& EndColor, ParticleStates& ParticleStateRef, float* restrict ParticleR, float* restrict ParticleG, float* restrict ParticleB);
-    extern template void UpdateParticleColor<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor, const glm::vec3& EndColor, ParticleStates& ParticleStateRef, float* restrict ParticleR, float* restrict ParticleG, float* restrict ParticleB);
-    extern template void UpdateParticleColor<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor, const glm::vec3& EndColor, ParticleStates& ParticleStateRef, float* restrict ParticleR, float* restrict ParticleG, float* restrict ParticleB);
+    extern template void UpdateParticleColor<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor,
+        const glm::vec3& EndColor, ParticleStates& ParticleStateRef, float* restrict ParticleR, float* restrict ParticleG, float* restrict ParticleB);
+    extern template void UpdateParticleColor<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor,
+        const glm::vec3& EndColor, ParticleStates& ParticleStateRef, float* restrict ParticleR, float* restrict ParticleG, float* restrict ParticleB);
+    extern template void UpdateParticleColor<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor,
+        const glm::vec3& EndColor, ParticleStates& ParticleStateRef, float* restrict ParticleR, float* restrict ParticleG, float* restrict ParticleB);
     template<SIMDLevel Level>
     void UpdateParticleLifeTime(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime, ParticleStates& ParticleStateRef)
     {
@@ -96,11 +108,15 @@ namespace ParticleMath
             ParticleStateRef.LifeTime[i] -= DeltaTime;
         }
     }
-    extern template void UpdateParticleLifeTime<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime, ParticleStates& ParticleStateRef);
-    extern template void UpdateParticleLifeTime<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime, ParticleStates& ParticleStateRef);
-    extern template void UpdateParticleLifeTime<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime, ParticleStates& ParticleStateRef);
+    extern template void UpdateParticleLifeTime<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count,
+        float DeltaTime, ParticleStates& ParticleStateRef);
+    extern template void UpdateParticleLifeTime<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count,
+        float DeltaTime, ParticleStates& ParticleStateRef);
+    extern template void UpdateParticleLifeTime<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count,
+        float DeltaTime, ParticleStates& ParticleStateRef);
     template<SIMDLevel Level>
-    void UpdateParticlePositionForAxis_Scalar(float* restrict StartParticlePtr, uint32_t Count, const float* restrict Velocity, float DeltaTime)
+    void UpdateParticlePositionForAxis(float* restrict StartParticlePtr, uint32_t Count,
+        const float* restrict Velocity, float DeltaTime)
     {
         // Semi-implicit Euler position step for a single axis. StartParticlePtr is
         // already offset to the chunk start, so the loop is 0-based. The restrict
@@ -110,13 +126,16 @@ namespace ParticleMath
             StartParticlePtr[i] += Velocity[i] * DeltaTime;
         }
     }
-    extern template void UpdateParticlePositionForAxis_Scalar<SIMDLevel::SSE2>(float* restrict StartParticlePtr, uint32_t Count, const float* restrict Velocity, float DeltaTime);
-    extern template void UpdateParticlePositionForAxis_Scalar<SIMDLevel::NEON>(float* restrict StartParticlePtr, uint32_t Count, const float* restrict Velocity, float DeltaTime);
-    extern template void UpdateParticlePositionForAxis_Scalar<SIMDLevel::AVX2>(float* restrict StartParticlePtr, uint32_t Count, const float* restrict Velocity, float DeltaTime);
+    extern template void UpdateParticlePositionForAxis<SIMDLevel::SSE2>(float* restrict StartParticlePtr,
+        uint32_t Count, const float* restrict Velocity, float DeltaTime);
+    extern template void UpdateParticlePositionForAxis<SIMDLevel::NEON>(float* restrict StartParticlePtr,
+        uint32_t Count, const float* restrict Velocity, float DeltaTime);
+    extern template void UpdateParticlePositionForAxis<SIMDLevel::AVX2>(float* restrict StartParticlePtr,
+        uint32_t Count, const float* restrict Velocity, float DeltaTime);
 
 // Custom SIMD implementations, for more complex forces like point and vortex
 template<SIMDLevel Level>
-void SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
+void SolvePointForce(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
         const float Strength, const float Radius, const float DeltaTime, ParticleStates& ParticleStateRef)
 {
     using namespace Commons;
@@ -216,14 +235,14 @@ void SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count, const g
         ParticleStateRef.Vz[i] += PointInfluence * DeltaZ;
     }
 }
-extern template void SolvePointForce_Vector<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
+extern template void SolvePointForce<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
             const float Strength, const float Radius, const float DeltaTime, ParticleStates& ParticleStateRef);
-extern template void SolvePointForce_Vector<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
+extern template void SolvePointForce<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
                 const float Strength, const float Radius, const float DeltaTime, ParticleStates& ParticleStateRef);
-extern template void SolvePointForce_Vector<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
+extern template void SolvePointForce<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
             const float Strength, const float Radius, const float DeltaTime, ParticleStates& ParticleStateRef);
 template<SIMDLevel Level>
-void SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
+void SolveVortex(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
     const float DeltaTime, const glm::vec3& VortexCenter, ParticleStates& ParticleStateRef)
 {
     using namespace Commons;
@@ -300,11 +319,11 @@ void SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t Count, const float
         ParticleStateRef.Vz[i] += TangentZ * DtStrength - RadialZ * DtPull;
     }
 }
-extern template void SolveVortex_Vector<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
+extern template void SolveVortex<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
         const float DeltaTime, const glm::vec3& VortexCenter, ParticleStates& ParticleStateRef);
-extern template void SolveVortex_Vector<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
+extern template void SolveVortex<SIMDLevel::NEON>(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
         const float DeltaTime, const glm::vec3& VortexCenter, ParticleStates& ParticleStateRef);
-extern template void SolveVortex_Vector<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
+extern template void SolveVortex<SIMDLevel::AVX2>(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
         const float DeltaTime, const glm::vec3& VortexCenter, ParticleStates& ParticleStateRef);
 }
 

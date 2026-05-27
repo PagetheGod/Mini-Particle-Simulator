@@ -244,7 +244,6 @@ public:
     friend class VulkanManager;
 private:
     // Granular particle functions that will be called by particle frame()
-
     void SpawnParticles(const ParticleSimulatorConfig& Config, const float DeltaTime);
     std::future<void> SpawnParticles_Dispatch(uint32_t StartIndex, uint32_t Count,
         const ParticleSimulatorConfig& Config);
@@ -295,8 +294,37 @@ private:
 
     void SolvePointForce(uint32_t StartParticleIndex, uint32_t Count,
         const glm::vec3& ForcePosition, const float Strength, const float Radius, const float DeltaTime);
-
-
+    // Top level solve force dispatch function, it will guard neon/x86 differences, and call the actual
+    // SolveForce, which dispatch different force solvers accordingly
+    void DispatchSolveForce(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
+        float DeltaTime, const glm::vec3* WindInfluences);
+    // The function that will switch on force type, and dispatch work loads to different force solvers
+    template<SIMDLevel Level>
+    void SolveForces(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
+        float DeltaTime, const glm::vec3* WindInfluences);
+    // Dispatch functions. These functions dispatch particle update workloads to SIMD functions based on our detected SIMD level
+    // Those are defined in ParticleMath_Shared.h
+    template<SIMDLevel Level>
+    void DispatchGravitySolver(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime);
+    template<SIMDLevel Level>
+    void DispatchDragSolver(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient,
+        const float DeltaTime);
+    template<SIMDLevel Level>
+    void DispatchWindSolver(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence);
+    template<SIMDLevel Level>
+    void DispatchPointSolver(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
+        const float Strength, const float Radius, const float DeltaTime);
+    template<SIMDLevel Level>
+    void DispatchVortexSolver(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
+        const float DeltaTime, const glm::vec3& VortexCenter);
+    template<SIMDLevel Level>
+    void DispatchLifeTimeUpdate(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime);
+    template<SIMDLevel Level>
+    void DispatchColorUpdate(uint32_t StartParticleIndex, uint32_t Count,
+        const glm::vec3& StartColor, const glm::vec3& EndColor);
+    template<SIMDLevel Level>
+    void DispatchPositionUpdate(float* StartParticlePtr, uint32_t Count, const float* Velocity,
+    float DeltaTime);
    // Custom SIMD functions
     template<SIMDLevel Level>
     void SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
