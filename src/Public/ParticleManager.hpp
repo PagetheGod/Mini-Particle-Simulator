@@ -292,12 +292,8 @@ private:
     ParticleStates m_ParticleStates;
     // Non-owning. Owned and started by Application, injected via the constructor
     VThreadPool* m_VThreadPool = nullptr;
-    SIMDManager m_SIMDManager;
     // States trackers
     uint32_t m_ParticleCount = 0;
-    // Detected at init via SIMDManager::CheckSIMDSupport, then clamped to a level we
-    // actually build a kernel TU for (SSE2/AVX2 on x86, NEON on ARM)
-    SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
     // Reusing future vectors to avoid heap allocation every frame
     std::vector<std::future<void>> m_SpawnFutures;
     std::vector<std::future<void>> m_UpdateFutures;
@@ -306,6 +302,10 @@ private:
     float m_WindTimers[Commons::Constants::MAX_NUM_FORCES] = {};
     float m_TimeSinceLastBurst = 0.f;
     float m_EmitterLifeTime = 0.f;
+    // Detected at init via SIMDManager::CheckSIMDSupport, then clamped to a level we
+    // actually build a kernel TU for (SSE2/AVX2 on x86, NEON on ARM)
+    SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
+    SIMDManager m_SIMDManager;
     // Constants
     static constexpr uint32_t NUM_MAX_PARTICLES = 300'000;
     static constexpr float KILL_Y = -1000.f;

@@ -125,7 +125,7 @@ void SoftwareRenderer::EndFrame(const bool IsPanelOpen)
     // Clip particle drawing to the viewport
     // SDL_SetRenderClipRect restricts all subsequent draw calls to
     // the given rectangle. This is the software equivalent of Vulkan's
-    // VkScissor(I am not doing that), articles will not render outside this rect.
+    // VkScissor, articles will not render outside this rect.
     const Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
     const float ScaleX = Layout::RENDER_WIDTH / VpRect.Width;
     const float ScaleY = Layout::RENDER_HEIGHT / VpRect.Height;

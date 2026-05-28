@@ -5,7 +5,6 @@
 #include "InputManager.hpp"
 #include "SoftwareRenderer.hpp"
 #include "UIManager.hpp"
-#include "SIMD.hpp"
 
 /*
 * This class will handle the GUI application, including:
@@ -51,9 +50,10 @@ private:
     float GetDeltaTime(uint64_t& LastNs);
     // Calculate delta time, FPS, and frame time each frame
     void FrameTiming(DeltaTimeData& DTData);
+    // Handle resize (maybe)
+    void ResizeWindow(int NewWidth, int NewHeight);
 private:
     SDL_Window* m_Window;
-    RendererType m_RendererType;
     // Declared before the renderers and the particle manager on purpose: they
     // borrow it via raw pointers, so the owner must be destroyed AFTER them.
     // Members destroy in reverse declaration order, so first-declared = last-destroyed.
@@ -62,15 +62,18 @@ private:
     std::unique_ptr<HardwareRenderer> m_HardwareRenderer;
     std::unique_ptr<UIManager> m_UIManager;
     std::unique_ptr<ParticleManager> m_ParticleManager;
-    InputManager m_InputManager; // Actual instance not a ptr because it's small
     Camera2D* m_Camera2D; // Raw ptr because we do not own it
     Camera* m_Camera;
-
+    RendererType m_RendererType;
+    InputManager m_InputManager; // Actual instance not a ptr because it's small
     // States
     bool m_Paused = true;
     bool m_ShouldLoop = true;
-    float m_PlaybackLeft = 0.f;
     bool m_IsConfigDirty = false;
+    float m_PlaybackLeft = 0.f;
+    int m_WindowWidth = 1920;
+    int m_WindowHeight = 1080;
+    float m_AspectRatio = 16.f / 9.f;
     // This config persists through the entire lifetime of the app
     // So we can easily check
     ParticleSimulatorConfig m_ParticleConfig;

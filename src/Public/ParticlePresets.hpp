@@ -7,8 +7,8 @@ namespace ParticlePresets
     // Explosion from a point — particles fly outward in all directions
     static constexpr ParticleSimulatorConfig OmniDirectionalBurst {
         .BurstInterval = 1.f,
-        .EmissionRate = 1500,
-        .EmitterLifeTime = 5.f,
+        .EmissionRate = 2000,
+        .EmitterLifeTime = 7.5f,
         .StartColor = glm::vec3(0.9f, 0.6f, 0.2f),
         .EndColor = glm::vec3(0.9f, 0.6f, 0.2f),
         .SphereRadius = 3.f,
@@ -27,8 +27,8 @@ namespace ParticlePresets
 
     // Particles shoot upward through a wide cone and arc back down
     static constexpr ParticleSimulatorConfig Firework {
-        .EmissionRate = 250,
-        .EmitterLifeTime = 5.f,
+        .EmissionRate = 350,
+        .EmitterLifeTime = 7.5f,
         .StartColor = glm::vec3(1.f, 0.3f, 0.3f),
         .EndColor = glm::vec3(1.f, 0.3f, 0.3f),
         .ConeDimensions = glm::vec2(5.f, 20.f),
@@ -47,8 +47,8 @@ namespace ParticlePresets
 
     // Narrow upward stream that falls back like water
     static constexpr ParticleSimulatorConfig Fountain {
-        .EmissionRate = 350,
-        .EmitterLifeTime = 5.f,
+        .EmissionRate = 500,
+        .EmitterLifeTime = 7.5f,
         .StartColor = glm::vec3(0.3f, 0.6f, 1.f),
         .EndColor = glm::vec3(0.3f, 0.6f, 1.f),
         .ConeDimensions = glm::vec2(3.f, 8.f),
@@ -69,7 +69,7 @@ namespace ParticlePresets
     // vertical and horizontal spreads
     static constexpr ParticleSimulatorConfig Vortex {
         .EmissionRate = 500,
-        .EmitterLifeTime = 5.f,
+        .EmitterLifeTime = 7.5f,
         .StartColor = glm::vec3(0.6f, 0.2f, 0.9f),
         .EndColor = glm::vec3(0.6f, 0.2f, 0.9f),
         .ConeDimensions = glm::vec2(30.f, 30.f),
@@ -99,12 +99,12 @@ namespace ParticlePresets
     // Wide sheet of particles cascading downward
     static constexpr ParticleSimulatorConfig Waterfall {
         .EmissionRate = 1000,
-        .EmitterLifeTime = 5.f,
+        .EmitterLifeTime = 7.5f,
         .StartColor = glm::vec3(0.4f, 0.7f, 1.f),
         .EndColor = glm::vec3(0.4f, 0.7f, 1.f),
-        .BoxDimensions = glm::vec3(50.f, 0.1f, 1.f),
+        .BoxDimensions = glm::vec3(100.f, 0.1f, 1.f),
         .LifeTime = glm::vec2(2.f, 4.f),
-        .Scale = glm::vec2(0.15f, 0.15f),
+        .Scale = glm::vec2(0.45f, 0.45f),
         .Speed = glm::vec2(0.5f, 2.5f),
         .ForceConfigData = { .Gravity = 5.f },
         .Shape = SpawnShape::Box,
@@ -122,9 +122,9 @@ namespace ParticlePresets
         .EmitterLifeTime = 7.5f,
         .StartColor = glm::vec3(0.95f, 0.95f, 1.f),
         .EndColor = glm::vec3(0.95f, 0.95f, 1.f),
-        .BoxDimensions = glm::vec3(50.f, 0.f, 10.f),
+        .BoxDimensions = glm::vec3(100.f, 0.f, 10.f),
         .LifeTime = glm::vec2(4.f, 8.f),
-        .Scale = glm::vec2(0.1f, 0.1f),
+        .Scale = glm::vec2(0.3f, 0.3f),
         .Speed = glm::vec2(0.3f, 0.8f),
         .ForceConfigData = {
             .Gravity = 0.3f,
@@ -147,20 +147,16 @@ namespace ParticlePresets
     };
 #ifdef ENABLE_STRESS_PRESET
     // A preset that forces heavy computations for benchmarking purposes.
-    // Goal: drive the particle count to the cap and hold it there so the per-frame SIMD
-    // load stays maxed — continuous emission at max rate, max lifetime so nothing expires
-    // mid-test, and a net-containing force field (drag + inward vortices + point attractors)
-    // so particles stay clustered near the origin, far from the Y kill plane. All 9 force
-    // slots are filled because the force COUNT, not their strength, is what drives compute.
+    //
     static constexpr ParticleSimulatorConfig Stress {
         .EmissionRate = 20'000,
         .EmitterLifeTime = 15.f,
         .StartColor = glm::vec3(1.f, 0.f, 1.f),
         .EndColor = glm::vec3(0.f, 1.f, 1.f),
-        // Cone is the heaviest spawn shape (cbrt/tan/sin/cos per particle); keep it moderate
-        .ConeDimensions = glm::vec2(20.f, 30.f), // Height, half-angle in degrees
+        // Cone is the heaviest spawn shape (cbrt/tan/sin/cos per particle)
+        .ConeDimensions = glm::vec2(45.f, 30.f), // Height, half-angle in degrees
         .LifeTime = glm::vec2(15.f, 15.f),       // Max lifetime; with no-random the spawner uses .x
-        .Scale = glm::vec2(0.1f, 0.4f),          // Min != max so "random size" actually varies
+        .Scale = glm::vec2(1.f, 1.5f),
         .Speed = glm::vec2(1.f, 5.f),            // Randomized but slow, so particles linger on screen
         .ForceConfigData = {
             .Gravity = 0.1f,
@@ -171,7 +167,7 @@ namespace ParticlePresets
                 // [1][2] Two winds, mostly horizontal, different periods so they don't sync up
                 ForceData{ .Direction = glm::vec3(1.f, 0.2f, 0.f), .Strength = 6.f, .WindPeriod = 2.f },
                 ForceData{ .Direction = glm::vec3(-0.4f, 0.f, 0.9f), .Strength = 5.f, .WindPeriod = 3.5f },
-                // [3][4][5] Three vortices (all share the origin Y-axis) — radial term pulls
+                // [3][4][5] Three vortices (all share the origin Y-axis)
                 // particles inward, tangential term makes them orbit. Inward = containing
                 ForceData{ .Strength = 6.f, .VortexPull = 3.f },
                 ForceData{ .Strength = 5.f, .VortexPull = 2.f },

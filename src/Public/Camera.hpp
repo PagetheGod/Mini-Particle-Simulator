@@ -61,7 +61,7 @@ private:
     float m_ZoomX = 1.f;
     // Constants, we have different zoom limits for software and hardware renderer due to how they
     // render the actual sprites
-    static constexpr float FIELD_OF_VIEW = 90.f;
+    static constexpr float FIELD_OF_VIEW = 120.f;
     static constexpr float NEAR_PLANE = 0.1f;
     static constexpr float FAR_PLANE = 1000.f;
     static constexpr float MIN_ZOOM_Y = 0.8f;

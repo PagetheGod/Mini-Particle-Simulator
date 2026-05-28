@@ -224,13 +224,13 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
             case SpawnShape::Sphere:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Radius", &Config.SphereRadius,
-                    0.1f, 50.f, "%.1f");
+                    0.1f, 100.f, "%.1f");
                 break;
             }
             case SpawnShape::Cone:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Axis Length", &Config.ConeDimensions.x,
-                    0.1f, 50.f, "%.1f");
+                    0.1f, 100.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Half Angle", &Config.ConeDimensions.y,
                     0.5f, 45.f, "%.1f");
                 break;
@@ -240,11 +240,11 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
                 // Min is 0 so the user can flatten one axis to make a plane
                 bool DimensionDirty = false;
                 DimensionDirty |= ImGui::SliderFloat("Width", &Config.BoxDimensions.x,
-                    0.f, 100.f, "%.1f");
+                    0.f, 200.f, "%.1f");
                 DimensionDirty |= ImGui::SliderFloat("Height", &Config.BoxDimensions.y,
-                    0.f, 100.f, "%.1f");
+                    0.f, 200.f, "%.1f");
                 DimensionDirty |= ImGui::SliderFloat("Depth", &Config.BoxDimensions.z,
-                    0.f, 100.f, "%.1f");
+                    0.f, 200.f, "%.1f");
                 if (DimensionDirty)
                 {
                     // At most one axis can be zero (plane), otherwise SpawnParticles_Speed
@@ -291,11 +291,11 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
             case SpawnShape::Ring:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Inner Radius", &Config.RingDimensions.x,
-                    0.f, 50.f, "%.1f");
-                IsConfigDirty |= ImGui::SliderFloat("Outer Radius", &Config.RingDimensions.y,
-                    0.f, 50.f, "%.1f");
-                IsConfigDirty |= ImGui::SliderFloat("Height", &Config.RingDimensions.z,
                     0.f, 100.f, "%.1f");
+                IsConfigDirty |= ImGui::SliderFloat("Outer Radius", &Config.RingDimensions.y,
+                    0.f, 100.f, "%.1f");
+                IsConfigDirty |= ImGui::SliderFloat("Height", &Config.RingDimensions.z,
+                    0.f, 150.f, "%.1f");
                 // Clamp the min to be smaller than max
                 if (Config.RingDimensions.x > Config.RingDimensions.y)
                 {
@@ -306,9 +306,9 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
             case SpawnShape::Cylinder:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Height", &Config.CylinderDimensions.y,
-                    0.f, 80.f, "%.1f");
+                    0.f, 200.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Radius", &Config.CylinderDimensions.x,
-                    0.f, 80.f, "%.1f");
+                    0.f, 150.f, "%.1f");
                 break;
             }
             default:
@@ -378,9 +378,9 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // Min and max scales of the particles
             IsConfigDirty |= ImGui::SliderFloat("Size Min", &Config.Scale.x,
-                0.1f, 1.5f, "%.1f");
+                0.1f, 1.75f, "%.1f");
             IsConfigDirty |= ImGui::SliderFloat("Size Max", &Config.Scale.y,
-                0.1f, 1.5f, "%.1f");
+                0.1f, 1.75f, "%.1f");
             if (Config.Scale.x >= Config.Scale.y)
             {
                 Config.Scale.x = std::max(0.1f, Config.Scale.y - 0.1f);
@@ -389,7 +389,7 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         else
         {
             // No random interval for spawn size, just fixed
-            IsConfigDirty |= ImGui::SliderFloat("Size", &Config.Scale.x, 0.1f, 1.5f, "%.1f");
+            IsConfigDirty |= ImGui::SliderFloat("Size", &Config.Scale.x, 0.1f, 1.75f, "%.1f");
         }
         Config.IsRandomScale = IsRandomScale;
 

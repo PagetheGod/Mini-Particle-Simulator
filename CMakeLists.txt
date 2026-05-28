@@ -212,8 +212,13 @@ endif()
 
 message(STATUS "DXC compiler: ${DXC}")
 
-# Set the shader output path next to the executable
-set(SHADER_OUTPUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Shaders)
+# Compile shaders into a config-agnostic staging dir inside the build tree. The
+# CompileShaders target (below) then copies them next to the executable. Staging
+# keeps the DXC custom-command OUTPUT free of generator expressions (so dependency
+# tracking stays correct) while still landing the .spv files beside the exe for
+# BOTH single-config generators (Ninja/Make put the exe in bin/) and multi-config
+# ones (Visual Studio put it in bin/<Config>/, a per-config subdir).
+set(SHADER_OUTPUT_DIR ${CMAKE_BINARY_DIR}/Shaders)
 
 
 # Define shader source files with DXC Profile, profile tells compiler what kind of shader are we working with
@@ -277,8 +282,23 @@ foreach (SHADER_IDX RANGE 0 ${SHADER_COUNT})
     list(APPEND SHADER_BINARIES ${SHADER_SPV}) # Add the compiled shader's path to the SHADER_BINARIES list
 endforeach()
 
-# Create command that depends on all compiled shaders
-add_custom_target(CompileShaders ALL DEPENDS ${SHADER_BINARIES})
+# Create a target that (1) depends on all compiled shaders so DXC reruns when a
+# .hlsl changes, then (2) copies the compiled .spv files next to the executable.
+# The copy is a target COMMAND (not a POST_BUILD on the exe) so it runs whenever
+# shaders recompile even if the exe itself doesn't relink, preserving the
+# "edit shader -> rebuild -> fresh shader beside the exe" workflow. Custom targets
+# always run, so copy_directory_if_different keeps it cheap when nothing changed.
+# $<TARGET_FILE_DIR> resolves per-config: bin/ for single-config generators
+# (Ninja/Make), bin/<Config>/ for multi-config ones (Visual Studio). Not gated on
+# WIN32 — the runtime opens "Shaders/<name>.spv" relative to the exe on every OS.
+add_custom_target(CompileShaders ALL
+    DEPENDS ${SHADER_BINARIES}
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+        ${SHADER_OUTPUT_DIR}
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/Shaders
+    COMMENT "Copying compiled shaders next to the executable"
+    VERBATIM
+)
 
 # Make our executable depend on the shaders
 add_dependencies(${PROJECT_NAME} CompileShaders)

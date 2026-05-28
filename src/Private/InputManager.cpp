@@ -135,6 +135,13 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 				}
 				break;
 			}
+		    case SDL_EVENT_WINDOW_RESIZED:
+			{
+				// Window resized, it had been resized to data1 x data2, inside the window event struct
+				Result.Event = InputEvent::ResizeWindow;
+				Result.NewWindowWidth = Event.window.data1;
+				Result.NewWindowHeight = Event.window.data2;
+			}
 			default:
 				break;
 		}

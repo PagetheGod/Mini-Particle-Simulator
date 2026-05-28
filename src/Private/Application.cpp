@@ -16,9 +16,9 @@
 #include "ParticleManager.hpp"
 using namespace Commons;
 
-Application::Application() : m_Window(nullptr), m_RendererType(RendererType::Software), m_VThreadPool(nullptr),
-m_SoftwareRenderer(nullptr), m_HardwareRenderer(nullptr), m_UIManager(nullptr), m_ParticleManager(nullptr),
-m_InputManager(InputManager()), m_Camera2D(nullptr), m_Camera(nullptr)
+Application::Application() : m_Window(nullptr), m_VThreadPool(nullptr),
+m_SoftwareRenderer(nullptr), m_HardwareRenderer(nullptr), m_UIManager(nullptr), m_ParticleManager(nullptr), m_Camera2D(nullptr),
+m_Camera(nullptr), m_RendererType(RendererType::Software), m_InputManager(InputManager())
 {
 
 }
@@ -147,40 +147,48 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	}
 
 	// Handle input
-	if (Input.Event == InputEvent::ToggleViewport)
+	switch (Input.Event)
 	{
-		m_UIManager->TogglePanelOpen();
-		// Viewport size just changed, refresh the camera's pan bounds so we can
-		// reach the newly-revealed area (or get clamped back into the new bounds)
-		if (m_RendererType == RendererType::Software)
+	    case InputEvent::ToggleViewport:
 		{
-			m_Camera2D->OnViewportResized(Layout::GetViewportRect(m_UIManager->IsPanelOpen()));
+	    	m_UIManager->TogglePanelOpen();
+	    	// Viewport size just changed, refresh the camera's pan bounds so we can
+	    	// reach the newly-revealed area (or get clamped back into the new bounds)
+	    	if (m_RendererType == RendererType::Software)
+	    	{
+	    		m_Camera2D->OnViewportResized(Layout::GetViewportRect(m_UIManager->IsPanelOpen()));
+	    	}
+	    	break;
 		}
-
-	}
-	else if (Input.Event == InputEvent::CameraPan)
-	{
-		if (m_RendererType == RendererType::Software)
+		case InputEvent::CameraPan:
 		{
-			m_Camera2D->Pan(Input.MouseDelta.x, Input.MouseDelta.y);
+	    	if (m_RendererType == RendererType::Software)
+	    	{
+	    		m_Camera2D->Pan(Input.MouseDelta.x, Input.MouseDelta.y);
+	    	}
+	    	else
+	    	{
+	    		m_Camera->Orbit(Input);
+	    	}
+	    	break;
 		}
-		else
+		case InputEvent::CameraZoom:
+	    {
+		    if (m_RendererType == RendererType::Software)
+		    {
+	    		Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
+	    		m_Camera2D->ZoomAt(Input.ScrollDelta, Input.MousePosition.x, Input.MousePosition.y,
+					VpRect);
+		    }
+		    else
+		    {
+	    		m_Camera->Zoom(Input);
+		    }
+	    	break;
+	    }
+		case InputEvent::ResizeWindow:
 		{
-			m_Camera->Orbit(Input);
-		}
-
-	}
-	else if (Input.Event == InputEvent::CameraZoom)
-	{
-		if (m_RendererType == RendererType::Software)
-		{
-			Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
-			m_Camera2D->ZoomAt(Input.ScrollDelta, Input.MousePosition.x, Input.MousePosition.y,
-				VpRect);
-		}
-		else
-		{
-			m_Camera->Zoom(Input);
+			ResizeWindow(Input.NewWindowWidth, Input.NewWindowHeight);
 		}
 	}
 
@@ -473,6 +481,20 @@ void Application::FrameTiming(DeltaTimeData& DTData)
 		DTData.FPS = FrameCount;
 		FrameCount = 0;
 		FPSTimer -= 1.f;
+	}
+}
+
+void Application::ResizeWindow(int NewWidth, int NewHeight)
+{
+	// Handle resizing in both software and hardware renderer
+	// One of the first things we need to figure out is the
+	if (m_RendererType == RendererType::Software)
+	{
+
+	}
+	else
+	{
+
 	}
 }
 

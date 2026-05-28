@@ -50,7 +50,7 @@ namespace Commons
         #else
             thread_local std::random_device RandomDevice;
             std::uniform_real_distribution<float> Distribution(Min, Max);
-            thread_local std::mt19937 RandomGenerator(RandomDevice);
+            thread_local std::mt19937 RandomGenerator(RandomDevice());
             return Distribution(RandomGenerator);
         #endif
         }
@@ -108,8 +108,6 @@ namespace Commons
         static constexpr int RENDER_HEIGHT = 1440;
         // Aspect ratio
         static constexpr float ASPECT_RATIO = 16.f / 9.f;
-
-
         // Percentage of the window occupied by render viewport(horizontal)
         static constexpr float VIEWPORT_PORTION_WIDTH = 0.6f;
         // Percentage of the window occupied by  render viewport(vertical)
@@ -135,6 +133,7 @@ namespace Commons
             float Height = VIEWPORT_HEIGHT_OPEN;
         };
         // Helper function to get viewport dimensions based on setting panel state(collapsed/open)
+        // Since we are now supporting resizing, this do a little bit more, it now calculates the actual sizes in real time
         inline ViewportRect GetViewportRect(const bool IsPanelOpen)
         {
             if (IsPanelOpen) {

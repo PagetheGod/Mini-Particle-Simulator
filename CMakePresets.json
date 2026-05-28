@@ -7,12 +7,16 @@
   },
   "$comment": [
     "Presets for the Mini Particle Simulator.",
-    "Toolchain is selected by COMPILER NAME (gcc/g++ or clang/clang++) resolved from PATH,",
-    "so there are no machine-specific absolute paths and these work wherever the toolchain lives.",
-    "You must have the toolchain (and the generator's tool) on PATH before invoking, e.g. run from",
-    "an MSYS2 UCRT64 shell for the gcc-* presets or a CLANG64 shell for the clang-* presets.",
-    "Generator: Ninja by default; the *-make presets are the fallback for systems without Ninja.",
-    "Usage:  cmake --preset gcc-debug   then   cmake --build --preset gcc-debug"
+    "Toolchain is selected by COMPILER NAME (gcc/g++, clang/clang++, or cl for MSVC) resolved",
+    "from PATH, so there are no machine-specific absolute paths and these work wherever the",
+    "toolchain lives. Have the toolchain (and the generator's tool) on PATH before invoking:",
+    "  - gcc-*   : run from an MSYS2 UCRT64 shell",
+    "  - clang-* : run from an MSYS2 CLANG64 shell",
+    "  - msvc-vs : Visual Studio generator, multi-config, NO dev prompt needed (emits a .sln)",
+    "Generator: Ninja by default; the *-make presets fall back to MinGW Makefiles (gcc/clang),",
+    "and msvc-vs omits the generator so CMake auto-selects the newest installed Visual Studio.",
+    "Usage:  cmake --preset gcc-debug then cmake --build --preset gcc-debug",
+    "        cmake --preset msvc-vs then cmake --build --preset msvc-vs-debug  (config chosen at build time)"
   ],
   "configurePresets": [
     {
@@ -165,6 +169,36 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "msvc-vs",
+      "inherits": [
+        "base"
+      ],
+      "displayName": "MSVC (Visual Studio, newest installed, multi-config)",
+      "description": "Zero setup MSVC: CMake auto-selects the newest installed Visual Studio and emits a .sln. Multi-config, choose Debug/Release at build time via msvc-vs-debug / msvc-vs-release.",
+      "$comment": [
+        "No 'generator' field on purpose. A VS generator name is version-locked ('Visual Studio",
+        "17 2022' vs 'Visual Studio 18 2026' vs future releases), so hardcoding one fails on any",
+        "machine with a different VS installed. Omitting it lets CMake's default-generator logic",
+        "pick the newest installed Visual Studio automatically, which is hopefully version-agnostic.",
+        "Visual Studio is a multi-config generator, sp CMAKE_BUILD_TYPE is intentionally not set here;",
+        "the config is chosen at build time by the build/workflow presets. No Developer Command",
+        "Prompt needed, the generator locates MSVC via vswhere. "
+      ],
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
+      "toolset": {
+        "value": "host=x64",
+        "strategy": "set"
+      }
     }
   ],
   "buildPresets": [
@@ -199,12 +233,22 @@
     {
       "name": "clang-release-make",
       "configurePreset": "clang-release-make"
+    },
+    {
+      "name": "msvc-vs-debug",
+      "configurePreset": "msvc-vs",
+      "configuration": "Debug"
+    },
+    {
+      "name": "msvc-vs-release",
+      "configurePreset": "msvc-vs",
+      "configuration": "Release"
     }
   ],
   "workflowPresets": [
     {
       "name": "clang-debug",
-      "$comment": "One shot configure -> build for the Clang Debug (Ninja) config: cmake --workflow --preset clang-debug",
+      "$comment": "configure -> build for the Clang Debug (Ninja) config: cmake --workflow --preset clang-debug",
       "steps": [
         {
           "type": "configure",
@@ -218,7 +262,7 @@
     },
     {
       "name": "clang-release",
-      "$comment": "One shot configure -> build for the Clang Release (Ninja) config: cmake --workflow --preset clang-release",
+      "$comment": "configure -> build for the Clang Release (Ninja) config: cmake --workflow --preset clang-release",
       "steps": [
         {
           "type": "configure",
@@ -232,7 +276,7 @@
     },
     {
       "name": "gcc-debug",
-      "$comment": "One-shot configure -> build for the GCC Debug (Ninja) config: cmake --workflow --preset gcc-debug",
+      "$comment": "configure -> build for the GCC Debug (Ninja) config: cmake --workflow --preset gcc-debug",
       "steps": [
         {
           "type": "configure",
@@ -246,7 +290,7 @@
     },
     {
       "name": "gcc-release",
-      "$comment": "One-shot configure -> build for the GCC Release (Ninja) config: cmake --workflow --preset gcc-release",
+      "$comment": "configure -> build for the GCC Release (Ninja) config: cmake --workflow --preset gcc-release",
       "steps": [
         {
           "type": "configure",
@@ -255,6 +299,34 @@
         {
           "type": "build",
           "name": "gcc-release"
+        }
+      ]
+    },
+    {
+      "name": "msvc-vs-debug",
+      "$comment": "MSVC via the Visual Studio generator, Debug config (no dev prompt needed).",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "msvc-vs"
+        },
+        {
+          "type": "build",
+          "name": "msvc-vs-debug"
+        }
+      ]
+    },
+    {
+      "name": "msvc-vs-release",
+      "$comment": "MSVC via the Visual Studio generator, Release config (no dev prompt needed).",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "msvc-vs"
+        },
+        {
+          "type": "build",
+          "name": "msvc-vs-release"
         }
       ]
     }
