@@ -32,7 +32,25 @@ void ParticleManager::InitializeParticles()
 
     // Initialize the SIMD manager and get back the SIMD level
     m_SIMDManager = SIMDManager();
+    m_SIMDManager.CheckSIMDSupport();
     m_SIMDLevel = m_SIMDManager.GetSIMDLevel();
+    /* We only build SSE2/AVX2/NEON kernel translation units, so map any detected level
+     * we don't have a TU for onto the nearest one we do
+     * This might look like a job for the SIMDManager class, and it probably is
+     * However, in my opinion the class should be as generic possible, and that means supporting avx512
+     * We don't support it in this object because it's not necessarily faster, but for a generic SIMD class
+     * I don't think it should force clamp to AVX2
+     */
+#if defined(__x86_64__) || defined(_M_X64)
+    if (m_SIMDLevel == SIMDLevel::AVX512)
+    {
+        m_SIMDLevel = SIMDLevel::AVX2;
+    }
+    else if (m_SIMDLevel == SIMDLevel::Scalar)
+    {
+        m_SIMDLevel = SIMDLevel::SSE2;
+    }
+#endif
 }
 
 void ParticleManager::ParticleFrame(const float DeltaTime, const ParticleSimulatorConfig& Config,
@@ -200,7 +218,7 @@ void ParticleManager::UpdateParticles(const ParticleSimulatorConfig& Config, flo
         Futures.push_back(m_VThreadPool->SubmitTask(
             [this, i, ChunkCount, &Config, DeltaTime, WindPtr]()
             {
-                SolveForces(i, ChunkCount, Config.ForceConfigData, DeltaTime, WindPtr);
+                DispatchSolveForce(i, ChunkCount, Config.ForceConfigData, DeltaTime, WindPtr);
             }));
     }
     for (auto& Future : Futures)
@@ -224,22 +242,7 @@ void ParticleManager::UpdateParticles(const ParticleSimulatorConfig& Config, flo
         Futures.push_back(m_VThreadPool->SubmitTask(
             [this, i, ChunkCount, &Config, DeltaTime]()
             {
-                // Color scaling over lifetime only if user asks for it.
-                // Randomized color at spawn has higher priority, if IsRandomColor is on,
-                // we do not scale color
-                if (Config.IsScalingColor && !Config.IsRandomColor)
-                {
-                    UpdateParticleColor(i, ChunkCount, Config.StartColor, Config.EndColor);
-                }
-                // Positions, remember to call for all three axes
-                UpdateParticlePositionForAxis_Scalar(&m_ParticleStates.Px[i], ChunkCount,
-                    &m_ParticleStates.Vx[i], DeltaTime);
-                UpdateParticlePositionForAxis_Scalar(&m_ParticleStates.Py[i], ChunkCount,
-                    &m_ParticleStates.Vy[i], DeltaTime);
-                UpdateParticlePositionForAxis_Scalar(&m_ParticleStates.Pz[i], ChunkCount,
-                    &m_ParticleStates.Vz[i], DeltaTime);
-                // Lifetime
-                UpdateParticleLifeTime(i, ChunkCount, DeltaTime);
+                DispatchUpdate(i, ChunkCount, Config, DeltaTime);
             }));
     }
     for (auto& Future : Futures)
@@ -251,19 +254,6 @@ void ParticleManager::UpdateParticles(const ParticleSimulatorConfig& Config, flo
     // Because we are swapping things
     CheckParticleLifeTime();
     CheckParticleY();
-}
-
-void ParticleManager::SolveGravity(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime)
-{
-    // Precompute scaled gravity's influences
-    const float ScaledGravityInfluence = GravityScale * Constants::GRAVITY * DeltaTime;
-
-    // Gravity pulls down in world space (negative Y direction)
-    // Camera2D flips Y when converting to screen space
-    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
-    {
-        m_ParticleStates.Vy[i] -= ScaledGravityInfluence;
-    }
 }
 
 glm::vec3 ParticleManager::ComputeWindInfluence(const uint32_t ForceIndex, const float Strength,
@@ -285,149 +275,6 @@ glm::vec3 ParticleManager::ComputeWindInfluence(const uint32_t ForceIndex, const
     }
     const glm::vec3 UnitDirection = Direction * glm::inversesqrt(DirLengthSqr);
     return UnitDirection * Strength * glm::sin(SinTime) * DeltaTime;
-}
-
-void ParticleManager::SolveWind(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence)
-{
-    // Apply precomputed wind influence to particle velocities
-    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
-    {
-        m_ParticleStates.Vx[i] += WindInfluence.x;
-        m_ParticleStates.Vy[i] += WindInfluence.y;
-        m_ParticleStates.Vz[i] += WindInfluence.z;
-    }
-}
-
-void ParticleManager::SolveDrag(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient,
-    const float DeltaTime)
-{
-    /*
-     * In terms of drag, since it's relative to our current speed, there are two ways of doing it using our method:
-     * 1. Solve it BEFORE any other force affect our speed
-     * 2. Solve it AFTER any other force affect our speed
-     * The difference probably wouldn't be huge
-     * The more accurate method will be to do some integration over time but too bad no time to make it work
-     */
-
-    // Precompute the drag coefficient times delta time
-    // Would have to clamp here if we did not provide a max frame time in Commons
-    const float DragInfluence = std::max(0.f, 1.f - DragCoefficient * DeltaTime);
-
-    // This loop might now auto vectorize well, since the compiler has to generate
-    // instructions to check whether the three pointers overlap
-    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
-    {
-        // We need to multiply each velocity by the drag influence
-        m_ParticleStates.Vx[i] *= DragInfluence;
-        m_ParticleStates.Vy[i] *= DragInfluence;
-        m_ParticleStates.Vz[i] *= DragInfluence;
-    }
-}
-
-void ParticleManager::SolveVortex(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength,
-    const float VortexPull, const float DeltaTime, const glm::vec3& VortexCenter)
-{
-    /*
-     * This is the trickiest force to solve. Details:
-     * 1. It needs two components, one from the particle to the center of the vortex, this is the radial component,
-     * it pulls the particle towards the center of the vortex;
-     * The second component is the one that's tangent to the orbit of particle around the vortex, unsurprisingly,
-     * this is the tangential component
-     * 2. The radial component is easy to deal with. However, the tangential component would require a cross product between
-     * the radial component and the axis of the vortex center. This is difficult to parallelize.
-     * 3. Therefore, we fixed the vortex's center axis to be the Y-axis(Up in 3D), this allows us to get the tangential component by:
-     * simply do (x, y, z) -> (z, 0, -x), the two's dot product equals 0, nice!
-     * To see this, take a look at the cross product of j x (a, b, c)
-     * | i  j  k |
-     * | 0  1  0 | = (c, 0, -a), isn't that beautiful?
-     * | a  b  c |
-     */
-    const float DtStrength = VortexStrength * DeltaTime;
-    const float DtPull = VortexPull * DeltaTime;
-    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
-    {
-        // Calculate the x and z components of vortex center to particle
-        float RadialX = m_ParticleStates.Px[i] - VortexCenter.x;
-        float RadialZ = m_ParticleStates.Pz[i] - VortexCenter.z;
-        // Calculate the inverse distance, for normalization
-        const float DistanceSquare = RadialX * RadialX + RadialZ * RadialZ;
-        const float Distance = std::max(glm::sqrt(DistanceSquare), Constants::CUSTOM_EPSILON);
-        const float InverseDistance = 1.f / Distance;
-        // Get the tangential components, normalize everything
-        float TangentX = RadialZ;
-        float TangentZ = -RadialX;
-        TangentX *= InverseDistance;
-        TangentZ *= InverseDistance;
-        RadialX *= InverseDistance;
-        RadialZ *= InverseDistance;
-        // Tangential spins around the axis, radial pulls toward the center (subtract = inward)
-        m_ParticleStates.Vx[i] += TangentX * DtStrength - RadialX * DtPull;
-        m_ParticleStates.Vz[i] += TangentZ * DtStrength - RadialZ * DtPull;
-    }
-}
-
-void ParticleManager::SolvePointForce(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
-    const float Strength, const float Radius, const float DeltaTime)
-{
-    /*
-     * Calculate the point attractor/repulsor force using smoothstep falloff.
-     * Steps:
-     * 1. Calculate the vector from the particle to the force position, get its length
-     * 2. Compute smoothstep(Radius, 0, dist), full strength at center, zero at Radius
-     * 3. Normalize the direction, apply force * smoothstep * dt to velocity
-     * Using smoothstep because the inverse square fall off is really EXTREME
-     */
-
-    /*
-     * The __restrict__ qualifiers SHOULD inform the compilers that the pointers do not overlap
-     * However godbolt showed that even with the qualifiers
-     * Clang seems to still run extra checks at run time, strange
-     */
-    float* restrict PosX = m_ParticleStates.Px.get() + StartParticleIndex;
-    float* restrict PosY = m_ParticleStates.Py.get() + StartParticleIndex;
-    float* restrict PosZ = m_ParticleStates.Pz.get() + StartParticleIndex;
-
-    float* restrict VelX = m_ParticleStates.Vx.get() + StartParticleIndex;
-    float* restrict VelY = m_ParticleStates.Vy.get() + StartParticleIndex;
-    float* restrict VelZ = m_ParticleStates.Vz.get() + StartParticleIndex;
-
-    const float DtStrength = Strength * DeltaTime;
-    for (uint32_t i = 0; i < Count; i++)
-    {
-        // Delta from particle to force position
-        float DeltaX = ForcePosition.x - PosX[i];
-        float DeltaY = ForcePosition.y - PosY[i];
-        float DeltaZ = ForcePosition.z - PosZ[i];
-
-        float DistSquare = DeltaX * DeltaX + DeltaY * DeltaY + DeltaZ * DeltaZ;
-        float Dist = std::sqrt(DistSquare);
-
-        // Skip particles outside the influence radius
-        if (Dist >= Radius)
-        {
-            continue;
-        }
-
-        // Normalize direction (avoid div by zero)
-        if (Dist < Constants::CUSTOM_EPSILON)
-        {
-            continue;
-        }
-        float InvDist = 1.f / Dist;
-        DeltaX *= InvDist;
-        DeltaY *= InvDist;
-        DeltaZ *= InvDist;
-
-        // smoothstep(Radius, 0, Dist) = smoothstep at edges [0, Radius], full at center
-        // t = clamp((Radius - Dist) / Radius, 0, 1) = 1 - Dist/Radius (already clamped by the early-out)
-        float T = 1.f - Dist / Radius;
-        float Falloff = T * T * (3.f - 2.f * T);
-
-        float PointInfluence = DtStrength * Falloff;
-        VelX[i] += PointInfluence * DeltaX;
-        VelY[i] += PointInfluence * DeltaY;
-        VelZ[i] += PointInfluence * DeltaZ;
-    }
 }
 
 void ParticleManager::DispatchSolveForce(uint32_t StartParticleIndex, uint32_t Count,
@@ -456,15 +303,85 @@ template <SIMDLevel Level>
 void ParticleManager::SolveForces(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
     float DeltaTime, const glm::vec3* WindInfluences)
 {
+    // Deal with gravity first
+    ParticleMath::SolveGravity<Level>(StartParticleIndex, Count, ForceConfigData.Gravity, DeltaTime, m_ParticleStates);
+    for (uint32_t i = 0; i < ForceConfigData.ExtraForceCount; i++)
+    {
+        if (!ForceConfigData.IsForceEnabled[i])
+        {
+            continue;
+        }
+        switch (ForceConfigData.ForceTypes[i])
+        {
+            case ForceType::Drag:
+            {
+                ParticleMath::SolveDrag<Level>(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Strength, DeltaTime,
+                    m_ParticleStates.Vx.get(), m_ParticleStates.Vy.get(), m_ParticleStates.Vz.get());
+                break;
+            }
+            case ForceType::Directional:
+            {
+                // Wind influence was pre-computed in UpdateParticles (once per frame)
+                // to avoid the race condition on m_TimeSinceLastWind
+                ParticleMath::SolveWind<Level>(StartParticleIndex, Count, WindInfluences[i], m_ParticleStates.Vx.get(),
+                    m_ParticleStates.Vy.get(), m_ParticleStates.Vz.get());
+                break;
+            }
+            case ForceType::Point:
+            {
+                ParticleMath::SolvePointForce<Level>(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Direction, ForceConfigData.ForceDataArray[i].Strength,
+                    ForceConfigData.ForceDataArray[i].PointRadius, DeltaTime, m_ParticleStates);
+                break;
+            }
+            case ForceType::Vortex:
+            {
+                ParticleMath::SolveVortex<Level>(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Strength, ForceConfigData.ForceDataArray[i].VortexPull,
+                    DeltaTime, glm::vec3(0.f), m_ParticleStates);
+                break;
+            }
+        }
+    }
 }
 
-void ParticleManager::UpdateParticleLifeTime(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime)
+void ParticleManager::DispatchUpdate(uint32_t StartParticleIndex, uint32_t Count,
+    const ParticleSimulatorConfig& Config, float DeltaTime)
 {
-    // Easy update, just decrement delta time from all particles
-    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
+    // Same architecture guard as DispatchSolveForce: pick the SIMD level once here,
+    // everything below is compile-time specialized on Level
+#if defined(__x86_64__) || defined(_M_X64)
+    if (m_SIMDLevel == SIMDLevel::AVX2)
     {
-        m_ParticleStates.LifeTime[i] -= DeltaTime;
+        UpdateChunk<SIMDLevel::AVX2>(StartParticleIndex, Count, Config, DeltaTime);
     }
+    else
+    {
+        UpdateChunk<SIMDLevel::SSE2>(StartParticleIndex, Count, Config, DeltaTime);
+    }
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    UpdateChunk<SIMDLevel::NEON>(StartParticleIndex, Count, Config, DeltaTime);
+#endif
+}
+
+template <SIMDLevel Level>
+void ParticleManager::UpdateChunk(uint32_t StartParticleIndex, uint32_t Count,
+    const ParticleSimulatorConfig& Config, float DeltaTime)
+{
+    // Color scaling over lifetime only if the user asks for it. Randomized color at
+    // spawn has higher priority, so if IsRandomColor is on we do not scale color
+    if (Config.IsScalingColor && !Config.IsRandomColor)
+    {
+        ParticleMath::UpdateParticleColor<Level>(StartParticleIndex, Count, Config.StartColor, Config.EndColor,
+            m_ParticleStates, m_ParticleStates.R.get(), m_ParticleStates.G.get(), m_ParticleStates.B.get());
+    }
+    // Positions, one call per axis
+    ParticleMath::UpdateParticlePositionForAxis<Level>(&m_ParticleStates.Px[StartParticleIndex], Count,
+        &m_ParticleStates.Vx[StartParticleIndex], DeltaTime);
+    ParticleMath::UpdateParticlePositionForAxis<Level>(&m_ParticleStates.Py[StartParticleIndex], Count,
+        &m_ParticleStates.Vy[StartParticleIndex], DeltaTime);
+    ParticleMath::UpdateParticlePositionForAxis<Level>(&m_ParticleStates.Pz[StartParticleIndex], Count,
+        &m_ParticleStates.Vz[StartParticleIndex], DeltaTime);
+    // Lifetime
+    ParticleMath::UpdateParticleLifeTime<Level>(StartParticleIndex, Count, DeltaTime, m_ParticleStates);
 }
 
 void ParticleManager::KillParticle(const uint32_t KillIndex) {
@@ -502,17 +419,6 @@ void ParticleManager::KillParticle(const uint32_t KillIndex) {
         std::swap(m_ParticleStates.MaxLifeTime[KillIndex], m_ParticleStates.MaxLifeTime[LastAliveIndex]);
     }
     m_ParticleCount--;
-}
-
-// Function that will update one component of particle positions
-// We pass it the component position array ptr, and the component velocity array ptr
-void ParticleManager::UpdateParticlePositionForAxis_Scalar(float* restrict StartParticlePtr, uint32_t Count,
-    const float* restrict Velocity, float DeltaTime)
-{
-    for (uint32_t i = 0; i < Count; i++)
-    {
-        StartParticlePtr[i] += Velocity[i] * DeltaTime;
-    }
 }
 
 void ParticleManager::CheckParticleLifeTime()
@@ -808,330 +714,6 @@ float ParticleManager::SpawnParticles_LifeTime(const ParticleSimulatorConfig& Co
     return Config.LifeTime.x;
 }
 
-// Top level force solving function that will call the rest
-
-void ParticleManager::SolveForces(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
-    float DeltaTime, const glm::vec3* WindInfluences)
-{
-    // Deal with gravity first
-    SolveGravity(StartParticleIndex, Count, ForceConfigData.Gravity, DeltaTime);
-    for (uint32_t i = 0; i < ForceConfigData.ExtraForceCount; i++)
-    {
-        if (!ForceConfigData.IsForceEnabled[i])
-        {
-            continue;
-        }
-        switch (ForceConfigData.ForceTypes[i])
-        {
-            case ForceType::Drag:
-            {
-                SolveDrag(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Strength,
-                    DeltaTime);
-                break;
-            }
-            case ForceType::Directional:
-            {
-                // Wind influence was pre-computed in UpdateParticles (once per frame)
-                // to avoid the race condition on m_TimeSinceLastWind
-                SolveWind(StartParticleIndex, Count, WindInfluences[i]);
-                break;
-            }
-            case ForceType::Point:
-            {
-                /*
-                 * Hardcoded to generate only SSE2 SIMD codes
-                 * The reason is that AVX2 and 512 requires the -mavx and -mavx512 flgas
-                 * These flags will allow the compilers to generate avx and avx512 instructions
-                 * And the flags do not have any compile/link time check to verify hardware supports
-                 * Which means if we compile the codes with these flags and run the app on an old CPU
-                 * The program will crash because it does not support the instructions
-                 * SSE2 on the other hand has much wider support, so we can use it
-                 * Like I don't think any one is gonna run this on a 32-bit CPU
-                 */
-            #if defined(__x86_64__) || defined(_M_X64)
-                SolvePointForce_Vector<SIMDLevel::SSE2>(StartParticleIndex, Count,
-                    ForceConfigData.ForceDataArray[i].Direction,
-                    ForceConfigData.ForceDataArray[i].Strength,
-                    ForceConfigData.ForceDataArray[i].PointRadius, DeltaTime);
-            #else
-                SolvePointForce(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Direction,
-                    ForceConfigData.ForceDataArray[i].Strength,
-                    ForceConfigData.ForceDataArray[i].PointRadius, DeltaTime);
-            #endif
-                break;
-            }
-            case ForceType::Vortex:
-            {
-            #if defined(__x86_64__) || defined(_M_X64)
-                SolveVortex_Vector<SIMDLevel::SSE2>(StartParticleIndex, Count,
-                    ForceConfigData.ForceDataArray[i].Strength,
-                    ForceConfigData.ForceDataArray[i].VortexPull, DeltaTime, glm::vec3(0.f));
-            #else
-                SolveVortex(StartParticleIndex, Count, ForceConfigData.ForceDataArray[i].Strength,
-                    ForceConfigData.ForceDataArray[i].VortexPull, DeltaTime, glm::vec3(0.f));
-            #endif
-                break;
-            }
-        }
-    }
-}
-
-void ParticleManager::UpdateParticleColor(const uint32_t StartParticleIndex, const uint32_t Count,
-                                          const glm::vec3& StartColor, const glm::vec3& EndColor)
-{
-    for (uint32_t i = StartParticleIndex; i < StartParticleIndex + Count; i++)
-    {
-        // Lerp between start and end colors using the relative life time of each particle
-        const float ScaledLifeTime = m_ParticleStates.LifeTime[i] / m_ParticleStates.MaxLifeTime[i];
-        const float InverseLifeTime = 1.f - ScaledLifeTime;
-        m_ParticleStates.R[i] = StartColor.r * ScaledLifeTime + EndColor.r * InverseLifeTime;
-        m_ParticleStates.G[i] = StartColor.g * ScaledLifeTime + EndColor.g * InverseLifeTime;
-        m_ParticleStates.B[i] = StartColor.b * ScaledLifeTime + EndColor.b * InverseLifeTime;
-    }
-}
-template <SIMDLevel Level>
-void ParticleManager::DispatchGravitySolver(uint32_t StartParticleIndex, uint32_t Count, float GravityScale,
-    float DeltaTime)
-{
-    ParticleMath::SolveGravity<Level>(StartParticleIndex, Count, GravityScale, DeltaTime, m_ParticleStates);
-}
-
-template <SIMDLevel Level>
-void ParticleManager::DispatchDragSolver(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient,
-    const float DeltaTime)
-{
-    ParticleMath::SolveGravity<Level>(StartParticleIndex, Count, DragCoefficient, DeltaTime, m_ParticleStates);
-}
-
-template <SIMDLevel Level>
-void ParticleManager::DispatchWindSolver(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence)
-{
-    ParticleMath::SolveWind<Level>(StartParticleIndex, Count, WindInfluence, m_ParticleStates);
-}
-
-template <SIMDLevel Level>
-void ParticleManager::DispatchVortexSolver(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength,
-    const float VortexPull, const float DeltaTime, const glm::vec3& VortexCenter)
-{
-    ParticleMath::SolveVortex<Level>(StartParticleIndex, Count, VortexStrength, VortexPull, DeltaTime,
-        VortexCenter, m_ParticleStates);
-}
-
-template <SIMDLevel Level>
-void ParticleManager::DispatchPointSolver(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
-        const float Strength, const float Radius, const float DeltaTime)
-{
-    ParticleMath::SolvePointForce<Level>(StartParticleIndex, Count, ForcePosition, Strength, Radius, DeltaTime, m_ParticleStates);
-}
-
-template <SIMDLevel Level>
-void ParticleManager::DispatchLifeTimeUpdate(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime)
-{
-    ParticleMath::UpdateParticleLifeTime<Level>(StartParticleIndex, Count, DeltaTime, m_ParticleStates);
-}
-
-template <SIMDLevel Level>
-void ParticleManager::DispatchColorUpdate(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& StartColor,
-    const glm::vec3& EndColor)
-{
-    ParticleMath::UpdateParticleColor<Level>(StartParticleIndex, Count, StartColor, EndColor, m_ParticleStates);
-}
-
-template <SIMDLevel Level>
-void ParticleManager::DispatchPositionUpdate(float* StartParticlePtr, uint32_t Count, const float* Velocity,
-    float DeltaTime)
-{
-    ParticleMath::UpdateParticlePositionForAxis<Level>(StartParticlePtr, Count, Velocity, DeltaTime, m_ParticleStates);
-}
-#if defined(__x86_64__) || defined(_M_X64)
-
-
-/*
- * I decided to add custom SIMD implementations of point and vortex force solvers
- * because after pasting our scalar versions into godbolt
- * It seems that even with __restrict__ qualifiers and O3 optimization level
- * Clang still generates many extra instructions to check whether pointers overlap at run time
- * Which is a waste
- */
-template <SIMDLevel Level>
-void ParticleManager::SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count,
-    const glm::vec3& ForcePosition, const float Strength, const float Radius, const float DeltaTime)
-{
-    using SIMDStruct = SIMDTraits<Level>;
-    constexpr uint32_t SIMDWidth = SIMDStruct::SIMDWidth;
-    // Calculate strength scaled by delta time
-    const float DtStrength = Strength * DeltaTime;
-
-    // Broadcast loop-invariant values
-    auto PointPositionX = SIMDStruct::VectorizedBroadcast(ForcePosition.x);
-    auto PointPositionY = SIMDStruct::VectorizedBroadcast(ForcePosition.y);
-    auto PointPositionZ = SIMDStruct::VectorizedBroadcast(ForcePosition.z);
-    auto StrengthVec = SIMDStruct::VectorizedBroadcast(DtStrength);
-    const float InvRadius = 1.f / Radius;
-    auto InvRadiusVec = SIMDStruct::VectorizedBroadcast(InvRadius);
-    auto Epsilon = SIMDStruct::VectorizedBroadcast(Constants::CUSTOM_EPSILON);
-    auto One = SIMDStruct::VectorizedBroadcast(1.f);
-    auto Three = SIMDStruct::VectorizedBroadcast(3.f);
-    auto Two = SIMDStruct::VectorizedBroadcast(2.f);
-    auto Zero = SIMDStruct::VectorizedZero();
-
-    uint32_t i = StartParticleIndex;
-    for (; i + SIMDWidth <= StartParticleIndex + Count; i += SIMDWidth)
-    {
-        // Delta from particle to force position
-        auto DeltaX = SIMDStruct::VectorizedSub(PointPositionX, SIMDStruct::VectorizedLoad(&m_ParticleStates.Px[i]));
-        auto DeltaY = SIMDStruct::VectorizedSub(PointPositionY, SIMDStruct::VectorizedLoad(&m_ParticleStates.Py[i]));
-        auto DeltaZ = SIMDStruct::VectorizedSub(PointPositionZ, SIMDStruct::VectorizedLoad(&m_ParticleStates.Pz[i]));
-
-        // Distance squared
-        auto DistSquare = SIMDStruct::VectorizedAdd(
-            SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedMul(DeltaX, DeltaX), SIMDStruct::VectorizedMul(DeltaY, DeltaY)),
-            SIMDStruct::VectorizedMul(DeltaZ, DeltaZ));
-
-        // Clamp to epsilon before rsqrt to prevent div by 0
-        auto ClampedDistSquare = SIMDStruct::VectorizedMax(DistSquare, Epsilon);
-        auto InvDist = SIMDStruct::VectorizedRSqrt(ClampedDistSquare);
-        // Dist = 1 / InvDist, but we can also get it from DistSquare * InvDist
-        auto Dist = SIMDStruct::VectorizedMul(ClampedDistSquare, InvDist);
-
-        // Normalize direction
-        DeltaX = SIMDStruct::VectorizedMul(DeltaX, InvDist);
-        DeltaY = SIMDStruct::VectorizedMul(DeltaY, InvDist);
-        DeltaZ = SIMDStruct::VectorizedMul(DeltaZ, InvDist);
-
-        // Smoothstep falloff: T = clamp(1 - Dist/Radius, 0, 1), Falloff = T*T*(3 - 2*T)
-        // Particles outside the radius get T=0 → Falloff=0 → no force applied
-        auto T = SIMDStruct::VectorizedSub(One, SIMDStruct::VectorizedMul(Dist, InvRadiusVec));
-        T = SIMDStruct::VectorizedMax(T, Zero);
-        T = SIMDStruct::VectorizedMin(T, One);
-        auto Falloff = SIMDStruct::VectorizedMul(
-            SIMDStruct::VectorizedMul(T, T),
-            SIMDStruct::VectorizedSub(Three, SIMDStruct::VectorizedMul(Two, T)));
-
-        // Force magnitude = Strength * dt * smoothstep
-        auto ForceInfluence = SIMDStruct::VectorizedMul(StrengthVec, Falloff);
-
-        // Load velocities, apply force along normalized direction, then store back
-        auto AdjustedVx = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vx[i]);
-        auto AdjustedVy = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vy[i]);
-        auto AdjustedVz = SIMDStruct::VectorizedLoad(&m_ParticleStates.Vz[i]);
-
-        AdjustedVx = SIMDStruct::VectorizedAdd(AdjustedVx, SIMDStruct::VectorizedMul(DeltaX, ForceInfluence));
-        AdjustedVy = SIMDStruct::VectorizedAdd(AdjustedVy, SIMDStruct::VectorizedMul(DeltaY, ForceInfluence));
-        AdjustedVz = SIMDStruct::VectorizedAdd(AdjustedVz, SIMDStruct::VectorizedMul(DeltaZ, ForceInfluence));
-
-        SIMDStruct::VectorizedStore(&m_ParticleStates.Vx[i], AdjustedVx);
-        SIMDStruct::VectorizedStore(&m_ParticleStates.Vy[i], AdjustedVy);
-        SIMDStruct::VectorizedStore(&m_ParticleStates.Vz[i], AdjustedVz);
-    }
-    // Scalar cleanup for remaining particles
-    for (; i < StartParticleIndex + Count; i++)
-    {
-        float DeltaX = ForcePosition.x - m_ParticleStates.Px[i];
-        float DeltaY = ForcePosition.y - m_ParticleStates.Py[i];
-        float DeltaZ = ForcePosition.z - m_ParticleStates.Pz[i];
-
-        float DistSquare = DeltaX * DeltaX + DeltaY * DeltaY + DeltaZ * DeltaZ;
-        float Dist = std::sqrt(DistSquare);
-
-        if (Dist >= Radius || Dist < Constants::CUSTOM_EPSILON)
-        {
-            continue;
-        }
-
-        float InverseDist = 1.f / Dist;
-        DeltaX *= InverseDist;
-        DeltaY *= InverseDist;
-        DeltaZ *= InverseDist;
-
-        float T = 1.f - Dist / Radius;
-        float Falloff = T * T * (3.f - 2.f * T);
-        float PointInfluence = DtStrength * Falloff;
-
-        m_ParticleStates.Vx[i] += PointInfluence * DeltaX;
-        m_ParticleStates.Vy[i] += PointInfluence * DeltaY;
-        m_ParticleStates.Vz[i] += PointInfluence * DeltaZ;
-    }
-}
-
-template <SIMDLevel Level>
-void ParticleManager::SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength,
-    const float VortexPull, const float DeltaTime, const glm::vec3& VortexCenter)
-{
-    // SIMD version of the vortex solver
-    using SIMDStruct = SIMDTraits<Level>;
-    constexpr uint32_t SIMDWidth = SIMDStruct::SIMDWidth;
-    const float DtStrength = VortexStrength * DeltaTime;
-    const float DtPull     = VortexPull * DeltaTime;
-
-    // Precompute and pre-load
-    auto DtStrengthVec = SIMDStruct::VectorizedBroadcast(DtStrength);
-    auto DtPullVec = SIMDStruct::VectorizedBroadcast(DtPull);
-    auto CenterXVec = SIMDStruct::VectorizedBroadcast(VortexCenter.x);
-    auto CenterZVec = SIMDStruct::VectorizedBroadcast(VortexCenter.z);
-
-    auto Epsilon = SIMDStruct::VectorizedBroadcast(Constants::CUSTOM_EPSILON);
-
-    uint32_t i = StartParticleIndex;
-    for (; i + SIMDWidth <= StartParticleIndex + Count; i += SIMDWidth)
-    {
-        // Radial components
-        auto RadialX = SIMDStruct::VectorizedSub(
-            SIMDStruct::VectorizedLoad(&m_ParticleStates.Px[i]), CenterXVec);
-        auto RadialZ = SIMDStruct::VectorizedSub(
-            SIMDStruct::VectorizedLoad(&m_ParticleStates.Pz[i]), CenterZVec);
-
-        // Distance square
-        auto DistSquare = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedMul(RadialX, RadialX),
-            SIMDStruct::VectorizedMul(RadialZ, RadialZ));
-        DistSquare = SIMDStruct::VectorizedMax(DistSquare, Epsilon);
-
-        // Again, this only have 12-bit precision, probably good enough for our scale
-        auto InverseDist = SIMDStruct::VectorizedRSqrt(DistSquare);
-
-        // Normalize the radial components first, so we can use normalized ones
-        // To directly get normalized tangents
-        RadialX = SIMDStruct::VectorizedMul(RadialX, InverseDist);
-        RadialZ = SIMDStruct::VectorizedMul(RadialZ, InverseDist);
-
-        auto TangentX = RadialZ;
-        auto TangentZ = SIMDStruct::VectorizedSub(SIMDStruct::VectorizedZero(), RadialX);
-
-        // Velocity update, tangent used for vortex strength, radial for pull
-        auto DeltaVx = SIMDStruct::VectorizedSub(SIMDStruct::VectorizedMul(TangentX, DtStrengthVec),
-            SIMDStruct::VectorizedMul(RadialX,  DtPullVec));
-        auto DeltaVz = SIMDStruct::VectorizedSub(SIMDStruct::VectorizedMul(TangentZ, DtStrengthVec),
-            SIMDStruct::VectorizedMul(RadialZ,  DtPullVec));
-
-        // Load existing velocity, accumulate, store back
-        auto AdjustedVx = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedLoad(&m_ParticleStates.Vx[i]),
-            DeltaVx);
-        auto AdjustedVz = SIMDStruct::VectorizedAdd(SIMDStruct::VectorizedLoad(&m_ParticleStates.Vz[i]),
-            DeltaVz);
-        SIMDStruct::VectorizedStore(&m_ParticleStates.Vx[i], AdjustedVx);
-        SIMDStruct::VectorizedStore(&m_ParticleStates.Vz[i], AdjustedVz);
-    }
-
-    // Scalar cleanup
-    for (; i < StartParticleIndex + Count; i++)
-    {
-        float RadialX = m_ParticleStates.Px[i] - VortexCenter.x;
-        float RadialZ = m_ParticleStates.Pz[i] - VortexCenter.z;
-        float DistanceSquare = RadialX * RadialX + RadialZ * RadialZ;
-        DistanceSquare = std::max(DistanceSquare, Constants::CUSTOM_EPSILON);
-        const float InverseDistance = 1.f / std::sqrt(DistanceSquare);
-
-        // Normalize first, then derive tangent from the normalized radial
-        RadialX *= InverseDistance;
-        RadialZ *= InverseDistance;
-        const float TangentX = RadialZ;
-        const float TangentZ = -RadialX;
-
-        m_ParticleStates.Vx[i] += TangentX * DtStrength - RadialX * DtPull;
-        m_ParticleStates.Vz[i] += TangentZ * DtStrength - RadialZ * DtPull;
-    }
-}
-#endif // defined(__x86_64__) || defined(_M_X64)
 
 
 

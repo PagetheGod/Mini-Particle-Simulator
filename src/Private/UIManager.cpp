@@ -98,7 +98,11 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
     // Currently, we are using a system where the enum constant's values must match the indices in this array
     // Fragile and EVIL, should probably look for a more stable solution
     bool IsConfigDirty = false;
+#ifdef ENABLE_STRESS_PRESET
+    const char* Presets[] = {"None", "OmniDirectionalBurst", "Firework", "Fountain", "Vortex", "Waterfall", "Snow", "Stress"};
+#else
     const char* Presets[] = {"None", "OmniDirectionalBurst", "Firework", "Fountain", "Vortex", "Waterfall", "Snow"};
+#endif
     static int SelectedPreset = 0;
     if (ImGui::Combo("Particle Preset", &SelectedPreset, Presets, IM_ARRAYSIZE(Presets)))
     {
@@ -143,6 +147,14 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
                 IsConfigDirty = true;
                 break;
             }
+#ifdef ENABLE_STRESS_PRESET
+            case PresetType::Stress:
+            {
+                Config = ParticlePresets::Stress;
+                IsConfigDirty = true;
+                break;
+            }
+#endif
         }
     }
 
@@ -188,7 +200,7 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
     }
 
     // Emitter lifetime - how long will our emitter spawn particles for
-    IsConfigDirty |= ImGui::SliderFloat("Emitter Lifetime", &Config.EmitterLifeTime, 0.5f, 10.f, "%.1f");
+    IsConfigDirty |= ImGui::SliderFloat("Emitter Lifetime", &Config.EmitterLifeTime, 0.5f, 15.f, "%.1f");
 
     // Spawn shape settings
     if (ImGui::CollapsingHeader("Emitter Settings", ImGuiTreeNodeFlags_DefaultOpen))
@@ -341,9 +353,9 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // Min and max lifetime
             IsConfigDirty |= ImGui::SliderFloat("Lifetime Min", &Config.LifeTime.x,
-                0.1f, 10.f, "%.1f");
+                0.1f, 15.f, "%.1f");
             IsConfigDirty |= ImGui::SliderFloat("Lifetime Max", &Config.LifeTime.y,
-                0.1f, 10.f, "%.1f");
+                0.1f, 15.f, "%.1f");
             // Remember to clamp!
             if (Config.LifeTime.x >= Config.LifeTime.y)
             {
@@ -354,7 +366,7 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // No random interval for lifetime, just fix lifetime
             IsConfigDirty |= ImGui::SliderFloat("Lifetime", &Config.LifeTime.x,
-                0.1f, 10.f, "%.1f");
+                0.1f, 15.f, "%.1f");
         }
         Config.IsRandomLifeTime = IsRandomLifeTime;
 

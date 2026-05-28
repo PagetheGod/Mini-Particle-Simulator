@@ -1,0 +1,143 @@
+{
+  "version": 10,
+  "cmakeMinimumRequired": {
+    "major": 4,
+    "minor": 2,
+    "patch": 3
+  },
+  "$comment": [
+    "Presets for the Mini Particle Simulator.",
+    "Two MSYS2 toolchains (UCRT64 GCC, CLANG64 Clang), each with Debug and Release.",
+    "Usage:  cmake --preset <name>   then   cmake --build --preset <name>",
+    "   or:  cmake --workflow --preset clang-debug   (configure + build in one go)"
+  ],
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "$comment": [
+        "Hidden common base. Never invoked directly, only inherited from.",
+        "Ninja: a single-config generator, so each concrete preset sets its own CMAKE_BUILD_TYPE.",
+        "binaryDir keys on ${presetName} so every toolchain/config gets an isolated build tree",
+        "(build/gcc-debug, build/clang-release, ...), keeping the one-dir-per-toolchain rule.",
+        "CMAKE_EXPORT_COMPILE_COMMANDS=ON writes compile_commands.json so clangd/IDEs can resolve",
+        "includes (this is what clears the 'glm/glm.hpp file not found' editor noise)."
+      ],
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "gcc",
+      "hidden": true,
+      "inherits": "base",
+      "$comment": [
+        "Hidden UCRT64 GCC toolchain. Explicit compiler paths mean no manual -D flags are needed.",
+        "environment.PATH prepends C:/msys64/ucrt64/bin for two reasons (see PROGRESS-GPU Session 14):",
+        "  1. windres needs its companion GCC preprocessor on PATH at configure time.",
+        "  2. the built .exe needs libstdc++/libgcc DLLs on PATH at run time.",
+        "Build and test presets inherit this environment automatically",
+        "(inheritConfigureEnvironment defaults to true)."
+      ],
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe",
+        "CMAKE_RC_COMPILER": "C:/msys64/ucrt64/bin/windres.exe"
+      },
+      "environment": {
+        "PATH": "C:/msys64/ucrt64/bin;$penv{PATH}"
+      }
+    },
+    {
+      "name": "clang",
+      "hidden": true,
+      "inherits": "base",
+      "$comment": [
+        "Hidden CLANG64 toolchain. PROGRESS-GPU notes this is the preferred, faster build.",
+        "llvm-windres is the RC compiler; clang64/bin goes on PATH for the same windres + runtime-DLL",
+        "reasons as the GCC toolchain above."
+      ],
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "C:/msys64/clang64/bin/clang.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/clang64/bin/clang++.exe",
+        "CMAKE_RC_COMPILER": "C:/msys64/clang64/bin/llvm-windres.exe"
+      },
+      "environment": {
+        "PATH": "C:/msys64/clang64/bin;$penv{PATH}"
+      }
+    },
+    {
+      "name": "gcc-debug",
+      "inherits": "gcc",
+      "displayName": "GCC Debug",
+      "description": "UCRT64 GCC, -O0 -Wall -Wextra, Vulkan debug layer on.",
+      "$comment": "CMAKE_BUILD_TYPE=Debug is what drives the $<CONFIG:Debug> generator expressions in CMakeLists (the -O0/warning flags and the ENABLE_DEBUG_LAYER define).",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "gcc-release",
+      "inherits": "gcc",
+      "displayName": "GCC Release",
+      "description": "UCRT64 GCC, -O3 -flto, no debug layer.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "clang-debug",
+      "inherits": "clang",
+      "displayName": "Clang Debug",
+      "description": "CLANG64, -O0 -Wall -Wextra, Vulkan debug layer on.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "clang-release",
+      "inherits": "clang",
+      "displayName": "Clang Release",
+      "description": "CLANG64, -O3 -flto, no debug layer.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "gcc-debug",
+      "configurePreset": "gcc-debug"
+    },
+    {
+      "name": "gcc-release",
+      "configurePreset": "gcc-release"
+    },
+    {
+      "name": "clang-debug",
+      "configurePreset": "clang-debug"
+    },
+    {
+      "name": "clang-release",
+      "configurePreset": "clang-release"
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "clang-debug",
+      "$comment": "One-shot configure -> build for the Clang Debug config: cmake --workflow --preset clang-debug",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "clang-debug"
+        },
+        {
+          "type": "build",
+          "name": "clang-debug"
+        }
+      ]
+    }
+  ]
+}

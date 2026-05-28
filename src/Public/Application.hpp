@@ -65,7 +65,6 @@ private:
     InputManager m_InputManager; // Actual instance not a ptr because it's small
     Camera2D* m_Camera2D; // Raw ptr because we do not own it
     Camera* m_Camera;
-    SIMDManager m_SIMDManager;
 
     // States
     bool m_Paused = true;

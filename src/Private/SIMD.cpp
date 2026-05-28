@@ -116,7 +116,14 @@ void SIMDManager::QueryCPUInfo(int LeafNumber, int SubleafNumber, uint32_t &Eax,
 
 void SIMDManager::CheckSIMDSupport()
 {
+    // On non-x86 we don't run CPUID. ARM gets NEON (mandatory on ARMv8-A); any other
+    // architecture falls back to Scalar. Without this guard, calling CheckSIMDSupport
+    // on ARM would clobber the NEON default with Scalar
+#if defined(__aarch64__) || defined(_M_ARM64)
+    m_SIMDLevel = SIMDLevel::NEON;
+#else
     m_SIMDLevel = SIMDLevel::Scalar;
+#endif
 }
 
 uint32_t SIMDManager::GetSIMDWidth() const

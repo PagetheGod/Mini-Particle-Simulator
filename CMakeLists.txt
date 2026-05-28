@@ -9,8 +9,6 @@ project(
 	LANGUAGES C CXX
 )
 
-include(CTest)
-
 # C++ stuffs, set required C++ standards and disable compiler-specific extensions
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -195,6 +193,7 @@ target_link_options(${PROJECT_NAME} PRIVATE
 target_compile_definitions(${PROJECT_NAME} PRIVATE
         $<$<CONFIG:Debug>:ENABLE_DEBUG_LAYER>
 )
+# Add the preprocessor definition for stress test
 
 # Vulkan and HLSL, find the DXC compiler that comes with vulkan
 find_program(DXC dxc HINTS

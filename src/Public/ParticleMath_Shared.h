@@ -20,16 +20,16 @@ namespace ParticleMath
     }
     /*
      * extern template here is an "explicit instantiation DECLARATION". It tells
-     * every translation unit that includes this header: do NOT compile your own
-     * copy of this specialization — its object code is emitted in exactly one
+     * every translation unit that includes this header: DO NOT compile your own
+     * copy of this specialization, its object code is emitted in exactly one
      * dedicated .cpp. Without these lines, ParticleManager.cpp's runtime dispatch
-     * switch would implicitly instantiate the AVX2/NEON bodies inside itself — a
-     * baseline-flagged TU — which is the illegal-instruction leak we are avoiding.
-     * The matching NON-extern "explicit instantiation DEFINITION"
+     * switch would implicitly instantiate the AVX2/NEON bodies inside itself, a
+     * baseline-flagged TU which will cause illegal-instruction leaks
+     * The matching non extern "explicit instantiation DEFINITION"
      * (template void SolveGravity<Level>(...);) lives in ParticleMath_<ISA>.cpp,
      * each built with that ISA's flags, and that single TU actually emits the code.
      * So: one extern-template-declaration per (kernel x level) here, one explicit
-     * instantiation-definition per level in the matching ISA .cpp.
+     * instantiation-definition per level in the matching ISA .cpp
      */
     extern template void SolveGravity<SIMDLevel::SSE2>(uint32_t StartParticleIndex, uint32_t Count, float GravityScale,
         float DeltaTime, ParticleStates& ParticleStateRef);

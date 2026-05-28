@@ -82,7 +82,6 @@ bool Application::Initialize() {
 	ImGui::CreateContext();
 	// Set up the UI and font scales for both software and hardware renderer
 	SetUIandFontScale();
-
 	// Init the renderer of the user's choice
 	if (m_RendererType == RendererType::Software)
 	{

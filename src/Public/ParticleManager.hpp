@@ -32,7 +32,8 @@ enum class PresetType : uint8_t
     Fountain,
     Vortex,
     Waterfall,
-    Snow
+    Snow,
+    Stress
 };
 
 enum class EmitterMode : uint8_t
@@ -250,19 +251,9 @@ private:
     void UpdateParticles(const ParticleSimulatorConfig& Config, float DeltaTime);
 
 
-    // This function only gets called when the user set scaled color to true
-    // Meaning that we need to lerp between start and end colors based on their relative lifetimes
-    void UpdateParticleColor(uint32_t StartParticleIndex, uint32_t Count,
-        const glm::vec3& StartColor, const glm::vec3& EndColor);
-    void UpdateParticleLifeTime(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime);
     // Function to kill a single particle
     void KillParticle(const uint32_t KillIndex);
 
-    // This function will use the already-updated velocities to update particle positions
-    // One axis at a time for parallel processing
-    // Meaning it should get called AFTER forces had been solved
-    void UpdateParticlePositionForAxis_Scalar(float* StartParticlePtr, uint32_t Count, const float* Velocity,
-    float DeltaTime);
     void CheckParticleLifeTime();
     void CheckParticleY();
     // Particle spawn functions for each shape, these only set position
@@ -277,62 +268,24 @@ private:
     float SpawnParticles_Size(const ParticleSimulatorConfig& Config);
     float SpawnParticles_LifeTime(const ParticleSimulatorConfig& Config);
 
-    // Force solvers, these will get dispatched by the UpdateParticle function
-    void SolveForces(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
-        float DeltaTime, const glm::vec3* WindInfluences);
-    void SolveGravity(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime);
-    void SolveWind(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence);
-    // Computes the wind influence vector for this frame. Call once per frame before dispatching SolveWind to threads.
+    // Computes the wind influence vector for this frame. Call once per frame before dispatching the wind solver to threads.
     // ForceIndex identifies which wind timer to use (each wind force gets its own oscillation phase).
     glm::vec3 ComputeWindInfluence(uint32_t ForceIndex, float Strength, const glm::vec3& Direction, float Period, float DeltaTime);
 
-    void SolveDrag(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient,
-        const float DeltaTime);
-
-    void SolveVortex(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
-        const float DeltaTime, const glm::vec3& VortexCenter);
-
-    void SolvePointForce(uint32_t StartParticleIndex, uint32_t Count,
-        const glm::vec3& ForcePosition, const float Strength, const float Radius, const float DeltaTime);
-    // Top level solve force dispatch function, it will guard neon/x86 differences, and call the actual
-    // SolveForce, which dispatch different force solvers accordingly
+    // Top-level force dispatch. Holds the architecture guard (x86 SSE2/AVX2, ARM NEON),
+    // selects the SIMD level once, then calls the templated SolveForces
     void DispatchSolveForce(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
         float DeltaTime, const glm::vec3* WindInfluences);
-    // The function that will switch on force type, and dispatch work loads to different force solvers
+    // Switches on force type and routes each force to its ParticleMath kernel at the given Level
     template<SIMDLevel Level>
     void SolveForces(uint32_t StartParticleIndex, uint32_t Count, const ForceConfig& ForceConfigData,
         float DeltaTime, const glm::vec3* WindInfluences);
-    // Dispatch functions. These functions dispatch particle update workloads to SIMD functions based on our detected SIMD level
-    // Those are defined in ParticleMath_Shared.h
+    // Same dispatch pair for the per-chunk color/position/lifetime update
+    void DispatchUpdate(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
+        float DeltaTime);
     template<SIMDLevel Level>
-    void DispatchGravitySolver(uint32_t StartParticleIndex, uint32_t Count, float GravityScale, float DeltaTime);
-    template<SIMDLevel Level>
-    void DispatchDragSolver(uint32_t StartParticleIndex, uint32_t Count, const float DragCoefficient,
-        const float DeltaTime);
-    template<SIMDLevel Level>
-    void DispatchWindSolver(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& WindInfluence);
-    template<SIMDLevel Level>
-    void DispatchPointSolver(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
-        const float Strength, const float Radius, const float DeltaTime);
-    template<SIMDLevel Level>
-    void DispatchVortexSolver(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
-        const float DeltaTime, const glm::vec3& VortexCenter);
-    template<SIMDLevel Level>
-    void DispatchLifeTimeUpdate(uint32_t StartParticleIndex, uint32_t Count, float DeltaTime);
-    template<SIMDLevel Level>
-    void DispatchColorUpdate(uint32_t StartParticleIndex, uint32_t Count,
-        const glm::vec3& StartColor, const glm::vec3& EndColor);
-    template<SIMDLevel Level>
-    void DispatchPositionUpdate(float* StartParticlePtr, uint32_t Count, const float* Velocity,
-    float DeltaTime);
-   // Custom SIMD functions
-    template<SIMDLevel Level>
-    void SolvePointForce_Vector(uint32_t StartParticleIndex, uint32_t Count, const glm::vec3& ForcePosition,
-        const float Strength, const float Radius, const float DeltaTime);
-
-    template<SIMDLevel Level>
-    void SolveVortex_Vector(uint32_t StartParticleIndex, uint32_t Count, const float VortexStrength, const float VortexPull,
-        const float DeltaTime, const glm::vec3& VortexCenter);
+    void UpdateChunk(uint32_t StartParticleIndex, uint32_t Count, const ParticleSimulatorConfig& Config,
+        float DeltaTime);
     // Helper to create a float array aligned to specified boundary
     AlignedArray AllocateAlignedArray(size_t NumElements, size_t Alignment);
 private:
@@ -342,8 +295,8 @@ private:
     SIMDManager m_SIMDManager;
     // States trackers
     uint32_t m_ParticleCount = 0;
-    // For now this member remains unused since we hardcoded SSE2 for all SIMD usages
-    // For compatibility
+    // Detected at init via SIMDManager::CheckSIMDSupport, then clamped to a level we
+    // actually build a kernel TU for (SSE2/AVX2 on x86, NEON on ARM)
     SIMDLevel m_SIMDLevel = SIMDLevel::SSE2;
     // Reusing future vectors to avoid heap allocation every frame
     std::vector<std::future<void>> m_SpawnFutures;
@@ -354,7 +307,7 @@ private:
     float m_TimeSinceLastBurst = 0.f;
     float m_EmitterLifeTime = 0.f;
     // Constants
-    static constexpr uint32_t NUM_MAX_PARTICLES = 150'000;
+    static constexpr uint32_t NUM_MAX_PARTICLES = 300'000;
     static constexpr float KILL_Y = -1000.f;
 
 };
