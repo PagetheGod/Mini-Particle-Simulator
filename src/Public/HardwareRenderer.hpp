@@ -29,8 +29,8 @@ public:
 	// Actual work functions
 	bool Initialize(SDL_Window* InWindow);
 	void BeginFrame();
-	void EndFrame(const bool IsPanelOpen);
-
+	void EndFrame(const bool IsPanelOpen, int WindowWidth, int WindowHeight);
+	void OnWindowResized();
 	// Setters and getters
 	Camera* GetCamera()
 	{

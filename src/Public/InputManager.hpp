@@ -38,11 +38,12 @@ struct InputResult
     // Current mouse position, for zoom-at-cursor,
     glm::vec2 MousePosition = glm::vec2(0.f);
     // New window sizes that come from window resize
-    int NewWindowHeight = 1920;
-    int NewWindowWidth = 1080;
+    int NewWindowWidth = 1920;
+    int NewWindowHeight = 1080;
     // Scroll delta, for zooming
     float ScrollDelta = 0.f;
     InputEvent Event = InputEvent::NoOp;
+    bool WindowResized = false;
 };
 
 
@@ -58,11 +59,11 @@ public:
     ~InputManager() = default;
 
     // Actual work functions
-    InputResult ProcessInput(const bool IsPanelOpen);
+    InputResult ProcessInput(const bool IsPanelOpen, int WindowWidth, int WindowHeight);
     // Setter and getters
 private:
     // Helper to figure out whether we are inside the viewport or not
-    bool IsCursorInViewport(const glm::vec2& CursorPosition, const bool IsPanelOpen);
+    bool IsCursorInViewport(const glm::vec2& CursorPosition, const bool IsPanelOpen, int WindowWidth, int WindowHeight);
 private:
     bool m_IsLMBPressed = false;
 };

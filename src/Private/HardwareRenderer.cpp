@@ -102,7 +102,7 @@ void HardwareRenderer::BeginFrame()
     ImGui::NewFrame();
 }
 
-void HardwareRenderer::EndFrame(const bool IsPanelOpen)
+void HardwareRenderer::EndFrame(const bool IsPanelOpen, int WindowWidth, int WindowHeight)
 {
     // First end the ImGui frame
     ImGui::Render();
@@ -113,7 +113,7 @@ void HardwareRenderer::EndFrame(const bool IsPanelOpen)
     PushConstants.CameraUp = m_Camera->GetUp();
     glm::mat4x4 ViewMatrix;
     glm::mat4x4 ProjectionMatrix;
-    const Layout::ViewportRect Viewport = Layout::GetViewportRect(IsPanelOpen);
+    const Layout::ViewportRect Viewport = Layout::GetViewportRect(IsPanelOpen, WindowWidth, WindowHeight);
     m_Camera->GetViewMatrix(ViewMatrix);
     m_Camera->GetProjectionMatrix(ProjectionMatrix,
         static_cast<float>(Viewport.Width) / static_cast<float>(Viewport.Height));
@@ -128,7 +128,12 @@ void HardwareRenderer::EndFrame(const bool IsPanelOpen)
         m_ParticleManager->GetParticleCount());
     // Tell Vulkan manager to draw the current frame
     m_VulkanManager->DrawFrame(m_ParticleManager->GetParticleCount(), m_VertexBuffer, PushConstants,
-        Viewport);
+        Viewport, WindowWidth, WindowHeight);
+}
+
+void HardwareRenderer::OnWindowResized()
+{
+    m_VulkanManager->NotifyResize();
 }
 
 

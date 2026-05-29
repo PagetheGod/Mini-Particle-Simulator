@@ -152,18 +152,29 @@ bool VulkanManager::Initialize(SDL_Window* InWindow)
 }
 
 void VulkanManager::DrawFrame(uint32_t InstanceCount, const AllocatedVkBuffer& InVertexBuffer, const PushConstantType& PushConstants,
-const Layout::ViewportRect& Viewport)
+const Layout::ViewportRect& Viewport, int WindowWidth, int WindowHeight)
 {
+    // For resizing, we first check our member flag to see if we need to recreate the swapchain
+    // We do this instead of relying solely on the vulkan acquire result because it's not always reported
+    // The flag is on the other hand, driven by SDL3 event update
+    if (m_FrameBufferResized)
+    {
+        m_FrameBufferResized = false;
+        RecreateSwapChain();
+        return;
+    }
     const uint32_t CurrentFrameIndex = m_VulkanContext.CurrentFrame;
     // Get the image index
     uint32_t ImageIndex = 0;
     VkResult AcquireResult = vkAcquireNextImageKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, UINT64_MAX,
         m_VulkanContext.ImageAvailableSemaphores[CurrentFrameIndex], nullptr, &ImageIndex);
-    // Acquire Result can contain an error, handle it here by potentially recreating the swapchain, TODO
+    // Acquire Result can contain an error, handle it here by potentially recreating the swapchain
+    // If the acquired image is already out of date, it's not usable, skip the frame like we did above
+    // When we set the flag through an SDL3 event
     if (AcquireResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        // TODO: mark swapchain dirty and skip rest of the frame, then recreate next time
-        // useful for resize, DPI changes, etc. not implemented at the moment
+        // We need to resize
+        RecreateSwapChain();
         return;
     }
     if (AcquireResult != VK_SUCCESS && AcquireResult != VK_SUBOPTIMAL_KHR)
@@ -173,7 +184,7 @@ const Layout::ViewportRect& Viewport)
     // Reset the fence once we know we will actually submit the draw call
     vkResetFences(m_VulkanContext.VulkanDevice, 1, &m_VulkanContext.InFlightFence[CurrentFrameIndex]);
     RecordFrameCommandBuffer(m_VulkanContext.CommandBuffers[CurrentFrameIndex], CurrentFrameIndex, ImageIndex, InstanceCount,
-        InVertexBuffer.VulkanBuffer, PushConstants, Viewport);
+        InVertexBuffer.VulkanBuffer, PushConstants, Viewport, WindowWidth, WindowHeight);
     // Submit all the commands, after waiting on an available image and signal render finish.
     const VkPipelineStageFlags WaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSubmitInfo SubmitInfo{};
@@ -197,9 +208,16 @@ const Layout::ViewportRect& Viewport)
     PresentInfo.pImageIndices = &ImageIndex;
     PresentInfo.swapchainCount = 1;
     PresentInfo.pSwapchains = &m_VulkanContext.SwapChain;
-    vkQueuePresentKHR(m_VulkanContext.PresentQueue, &PresentInfo);
+    VkResult PresentResult = vkQueuePresentKHR(m_VulkanContext.PresentQueue, &PresentInfo);
     // Advance the frame counter
     m_VulkanContext.CurrentFrame = (CurrentFrameIndex + 1) % VulkanContext::MAX_FRAMES_IN_FLIGHT;
+    // Check the present result we got back above, so we can resize the frame buffer in case of a window resize
+    if (PresentResult == VK_ERROR_OUT_OF_DATE_KHR || PresentResult == VK_SUBOPTIMAL_KHR ||
+        m_FrameBufferResized)
+    {
+        m_FrameBufferResized = false;
+        RecreateSwapChain();
+    }
 }
 
 
@@ -1876,7 +1894,8 @@ bool VulkanManager::CreateShaderModule(const std::vector<char>& InShaderBuffer, 
 }
 
 void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t CurrentFrame, uint32_t ImageIndex,
-    uint32_t InstanceCount, VkBuffer VertexBuffer, const PushConstantType &PushConstantData, const Layout::ViewportRect& Viewport)
+    uint32_t InstanceCount, VkBuffer VertexBuffer, const PushConstantType &PushConstantData, const Layout::ViewportRect& Viewport,
+    int WindowWidth, int WindowHeight)
 {
     using namespace Commons;
     VkCommandBufferBeginInfo CommandBufferBeginInfo = {};
@@ -1906,8 +1925,10 @@ void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint
      * The offscreen target is 2560×1440 but the viewport might only
      * cover a portion of it (when the panel is open: 1580/1920 * 2560).
      */
-    const float ScaleX = static_cast<float>(m_VulkanContext.OffScreen.Width) / Layout::WINDOW_WIDTH;
-    const float ScaleY = static_cast<float>(m_VulkanContext.OffScreen.Height) / Layout::WINDOW_HEIGHT;
+    const float ScaleX = static_cast<float>(m_VulkanContext.OffScreen.Width) /
+        static_cast<float>(m_VulkanContext.SwapChainExtent.width);
+    const float ScaleY = static_cast<float>(m_VulkanContext.OffScreen.Height) /
+        static_cast<float>(m_VulkanContext.SwapChainExtent.height);
     VkViewport ParticleVkViewport = {};
     ParticleVkViewport.x = Viewport.X * ScaleX;
     ParticleVkViewport.y = Viewport.Y * ScaleY;
@@ -1984,8 +2005,8 @@ void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint
      * image to the viewport region of the swapchain image.
      * The panel/status bar regions of the swapchain are NOT touched.
      */
-    const float BlitScaleX = static_cast<float>(m_VulkanContext.SwapChainExtent.width) / Layout::WINDOW_WIDTH;
-    const float BlitScaleY = static_cast<float>(m_VulkanContext.SwapChainExtent.height) / Layout::WINDOW_HEIGHT;
+    const float BlitScaleX = static_cast<float>(m_VulkanContext.SwapChainExtent.width) / WindowWidth;
+    const float BlitScaleY = static_cast<float>(m_VulkanContext.SwapChainExtent.height) / WindowHeight;
     VkImageBlit BlitRegion = {};
     BlitRegion.srcOffsets[0] = { 0, 0 };
     BlitRegion.srcOffsets[1] = { static_cast<int>(ParticleVkViewport.width * BlitScaleX),
@@ -2051,6 +2072,85 @@ void VulkanManager::RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint
     vkCmdEndRenderPass(CommandBuffer);
     vkEndCommandBuffer(CommandBuffer);
 
+}
+
+bool VulkanManager::RecreateSwapChain()
+{
+    int PixelWidth = 0;
+    int PixelHeight = 0;
+    // We already guard against a 0-sized window in application.cpp
+    SDL_GetWindowSizeInPixels(m_VulkanContext.Window, &PixelWidth, &PixelHeight);
+    /*
+     * For now we make the GPU idle for resizing since it SHOULD be rare in our app
+     * Optimize this later if it becomes an issue
+     */
+    vkDeviceWaitIdle(m_VulkanContext.VulkanDevice);
+    /*
+     * Destroy the size-dependent resources, the pass A doesn't get affected because we render to a fixed
+     * 2560 x 1440 super sampling buffer
+     * Order: framebuffers -> swapchain image views -> swapchain
+     * No need to touch offscreen, the render passes, particle buffers
+     */
+    // Frame buffers
+    for (VkFramebuffer& Framebuffer : m_VulkanContext.FrameBuffers)
+    {
+        vkDestroyFramebuffer(m_VulkanContext.VulkanDevice, Framebuffer, nullptr);
+    }
+    m_VulkanContext.FrameBuffers.clear();
+    // Image views
+    for (VkImageView& ImageView : m_VulkanContext.SwapChainImageViews)
+    {
+        vkDestroyImageView(m_VulkanContext.VulkanDevice, ImageView, nullptr);
+    }
+    m_VulkanContext.SwapChainImageViews.clear();
+    // Swap chain
+    vkDestroySwapchainKHR(m_VulkanContext.VulkanDevice, m_VulkanContext.SwapChain, nullptr);
+    m_VulkanContext.SwapChain = nullptr;
+    // Rebuild the all the stuffs, CreateSwapChain requeries surface capabilities and picks the new extents
+    // It will also recreate SwapChainImages and ImageViews
+    bool Result = CreateSwapChain();
+    if (!Result)
+    {
+        return false;
+    }
+    Result = CreateFrameBuffers();
+    if (!Result)
+    {
+        return false;
+    }
+    Result = UpdateRenderFinishSemaphores();
+    if (!Result)
+    {
+        return false;
+    }
+    return Result;
+}
+
+bool VulkanManager::UpdateRenderFinishSemaphores()
+{
+    /*
+     * This function involves a bit of nuances, I am not sure if this is even needed
+     * For ImageAvailableSemaphores and InFlightFences, these are per frame in flight, which does not get
+     * affected by resizing
+     * For RenderFinishedSemaphores, they are size dependent because image count can change after recreation
+     * Resizing usually don't change the image counts though
+     */
+    for (VkSemaphore& Semaphore : m_VulkanContext.RenderFinishedSemaphores)
+    {
+        vkDestroySemaphore(m_VulkanContext.VulkanDevice, Semaphore, nullptr);
+    }
+    m_VulkanContext.RenderFinishedSemaphores.clear();
+    m_VulkanContext.RenderFinishedSemaphores.resize(m_VulkanContext.SwapChainImages.size());
+    VkSemaphoreCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    for (VkSemaphore& Semaphore : m_VulkanContext.RenderFinishedSemaphores)
+    {
+        if (vkCreateSemaphore(m_VulkanContext.VulkanDevice, &CreateInfo, nullptr, &Semaphore) != VK_SUCCESS)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 /* Helper: Debug callback function

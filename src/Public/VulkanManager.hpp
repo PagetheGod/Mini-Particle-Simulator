@@ -192,7 +192,8 @@ public:
     // Actual work functions
     bool Initialize(SDL_Window* InWindow);
 	void DrawFrame(uint32_t InstanceCount, const AllocatedVkBuffer& InVertexBuffer, const PushConstantType& PushConstants,
- const Commons::Layout::ViewportRect& Viewport);
+	const Commons::Layout::ViewportRect& Viewport, int WindowWidth, int WindowHeight);
+
 	friend class HardwareRenderer;
 public:
 	// Setters and getters
@@ -200,7 +201,10 @@ public:
 	{
 		return &m_VulkanContext;
 	}
-
+	void NotifyResize()
+	{
+		m_FrameBufferResized = true;
+	}
 private:
 	// Create vulkan instance with all the validation layers and SDL3 extensions
 	bool CreateInstance();
@@ -258,13 +262,16 @@ private:
 	bool CreateShaderModule(const std::vector<char>& InShaderBuffer, VkShaderModule& OutShaderModule);
 
     void RecordFrameCommandBuffer(VkCommandBuffer CommandBuffer, uint32_t CurrentFrame, uint32_t ImageIndex, uint32_t InstanceCount, VkBuffer VertexBuffer,
-                                  const PushConstantType &PushConstantData, const Commons::Layout::ViewportRect& Viewport);
-
+                                  const PushConstantType &PushConstantData, const Commons::Layout::ViewportRect& Viewport,
+                                  int WindowWidth, int WindowHeight);
+	bool RecreateSwapChain(); // For handling resize
+	bool UpdateRenderFinishSemaphores(); // Also for handling resize
 private:
 	VulkanContext m_VulkanContext;
 	// Device extensions we require. Every device must support these.
 	// VK_KHR_SWAPCHAIN_EXTENSION_NAME is needed to present images to the screen.
 	const std::vector<const char*> DEVICE_EXTENSIONS = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	bool m_FrameBufferResized = false;
 };
 
 

@@ -30,8 +30,11 @@ void UIManager::DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t Par
 {
     using namespace Commons::Layout;
     // Position: full width, at the bottom of the window
-    ImGui::SetNextWindowPos(ImVec2(0, VIEWPORT_HEIGHT_OPEN));
-    ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, STATUS_BAR_HEIGHT));
+    // Live window size (ImGui coordinate space) so the bar tracks resizes instead of sitting at the
+    // hardcoded 1920x1080 spot. Same VIEWPORT_PORTION ratios the viewport/blit use, so they line up.
+    const ImVec2 DisplaySize = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos(ImVec2(0.f, DisplaySize.y * VIEWPORT_PORTION_HEIGHT));
+    ImGui::SetNextWindowSize(ImVec2(DisplaySize.x, DisplaySize.y * (1.f - VIEWPORT_PORTION_HEIGHT)));
 
     // Window flags: no decorations, no interaction, no scrolling.
     // NoBackground is not set, we want a solid background to clearly
@@ -74,8 +77,10 @@ bool UIManager::GetParticleSimulatorConfig(ParticleSimulatorConfig &Config)
 {
     using namespace Commons;
     // Start drawing the entire settings panel
-    ImGui::SetNextWindowPos(ImVec2(Layout::VIEWPORT_WIDTH_OPEN, 0));
-    ImGui::SetNextWindowSize(ImVec2(Layout::PANEL_WIDTH, Layout::WINDOW_HEIGHT));
+    // Live window size so the panel tracks resizes (was hardcoded 1920x1080).
+    const ImVec2 DisplaySize = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos(ImVec2(DisplaySize.x * Layout::VIEWPORT_PORTION_WIDTH, 0.f));
+    ImGui::SetNextWindowSize(ImVec2(DisplaySize.x * (1.f - Layout::VIEWPORT_PORTION_WIDTH), DisplaySize.y));
     // Set flags
     ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize;
@@ -702,8 +707,9 @@ void UIManager::DrawPanelExpandButton() {
     constexpr float ButtonMargin = 8.5f;
 
     // Anchor to the top right corner of the window
+    const ImVec2 DisplaySize = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(
-        ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) - WindowWidth - ButtonMargin, ButtonMargin));
+        ImVec2(DisplaySize.x - WindowWidth - ButtonMargin, ButtonMargin));
     ImGui::SetNextWindowSize(ImVec2(WindowWidth, WindowHeight));
 
     // Just like WIN32, when we create any window, we need to set flags
@@ -732,8 +738,7 @@ void UIManager::DrawPanelExpandButton() {
     const ImVec2 HintTextSize = ImGui::CalcTextSize(HintLabel);
     const float HintWidth = HintTextSize.x + Style.WindowPadding.x * 2.f;
     const float HintHeight = HintTextSize.y + Style.WindowPadding.y * 2.f;
-    ImGui::SetNextWindowPos(ImVec2(static_cast<float>(Layout::WINDOW_WIDTH) - HintWidth,
-               static_cast<float>(Layout::WINDOW_HEIGHT) - HintHeight));
+    ImGui::SetNextWindowPos(ImVec2(DisplaySize.x - HintWidth, DisplaySize.y - HintHeight));
     ImGui::SetNextWindowSize(ImVec2(HintWidth, HintHeight));
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);

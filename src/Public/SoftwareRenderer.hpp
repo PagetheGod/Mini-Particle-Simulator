@@ -31,6 +31,8 @@ public:
     void BeginFrame();
 
     // Called after ImGui::Render(), draws ImGui + clears the background.
+    // Option A (fixed-canvas resize): no window size needed — SDL's logical
+    // presentation letterboxes the fixed 1920x1080 layout into any window size.
     void EndFrame(const bool IsPanelOpen);
 
     // Getters and setters

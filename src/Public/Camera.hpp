@@ -21,7 +21,7 @@ public:
 
     // Actual work functions
     void Orbit(const InputResult& Input);
-    void Zoom(const InputResult& Input);
+    void Zoom(const InputResult& Input, const Commons::Layout::ViewportRect &ViewportRect);
     void AdjustCameraForResize(const Commons::Layout::ViewportRect& OldViewport,
         const Commons::Layout::ViewportRect& NewViewport);
 

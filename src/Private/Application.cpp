@@ -54,7 +54,7 @@ bool Application::Initialize() {
 
 	// Set up the flags to create our window
 	// Last flag handles high-DPI displays so our drawable area matches the pixel counts
-	constexpr SDL_WindowFlags WindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+	constexpr SDL_WindowFlags WindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE;
 	m_Window = SDL_CreateWindow(Constants::WINDOW_TITLE, Layout::WINDOW_WIDTH, Layout::WINDOW_HEIGHT,
 		WindowFlags);
 	if (!m_Window)
@@ -147,6 +147,20 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	}
 
 	// Handle input
+	// Some of the events are not handled here, which is ok since we already handled pause and quit
+	// Before we enter this function
+	// Handle resizing independently
+	if (Input.WindowResized)
+	{
+		SDL_GetWindowSizeInPixels(m_Window, &m_WindowWidth, &m_WindowHeight);
+		// We get a 0-sized window (minimized, just skip everything else)
+		if (m_WindowWidth == 0 || m_WindowHeight == 0)
+		{
+			return true;
+		}
+		m_AspectRatio = static_cast<float>(m_WindowWidth) / static_cast<float>(m_WindowHeight);
+		ResizeWindow(m_WindowWidth, m_WindowHeight);
+	}
 	switch (Input.Event)
 	{
 	    case InputEvent::ToggleViewport:
@@ -182,14 +196,11 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 		    }
 		    else
 		    {
-	    		m_Camera->Zoom(Input);
+		    	const Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen, m_WindowWidth, m_WindowHeight);
+	    		m_Camera->Zoom(Input, VpRect);
 		    }
 	    	break;
 	    }
-		case InputEvent::ResizeWindow:
-		{
-			ResizeWindow(Input.NewWindowWidth, Input.NewWindowHeight);
-		}
 	}
 
 	// UI, submits ImGui widgets between NewFrame and Render
@@ -226,7 +237,7 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 	}
 	else
 	{
-		m_HardwareRenderer->EndFrame(m_UIManager->IsPanelOpen());
+		m_HardwareRenderer->EndFrame(m_UIManager->IsPanelOpen(), m_WindowWidth, m_WindowHeight);
 	}
 	return true;
 }
@@ -490,11 +501,15 @@ void Application::ResizeWindow(int NewWidth, int NewHeight)
 	// One of the first things we need to figure out is the
 	if (m_RendererType == RendererType::Software)
 	{
-
+		// Option A (fixed canvas + letterbox): nothing to do here. SDL's logical presentation
+		// scales the fixed 1920x1080 layout into the resized window, and the 2D camera pans in
+		// that fixed logical space, so its bounds depend on the panel state, not the window size
+		// (panel-toggle already calls OnViewportResized). Revisit this branch if we switch to
+		// Option B (relayout at the live window size, revealing more of the world as it grows).
 	}
 	else
 	{
-
+		m_HardwareRenderer->OnWindowResized();
 	}
 }
 
@@ -515,7 +530,7 @@ void Application::Run()
 	while (Running)
 	{
 		FrameTiming(DTData);
-		InputResult Result = m_InputManager.ProcessInput(m_UIManager->IsPanelOpen());
+		InputResult Result = m_InputManager.ProcessInput(m_UIManager->IsPanelOpen(), m_WindowWidth, m_WindowHeight);
 		if (Result.Event == InputEvent::Quit)
 		{
 			Running = false;

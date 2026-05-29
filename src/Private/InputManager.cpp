@@ -6,7 +6,7 @@
 #include "InputManager.hpp"
 #include "Commons.hpp"
 
-InputResult InputManager::ProcessInput(const bool IsPanelOpen)
+InputResult InputManager::ProcessInput(const bool IsPanelOpen, int WindowWidth, int WindowHeight)
 {
 	InputResult Result{};
 	SDL_Event Event;
@@ -95,7 +95,7 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 				// Useful for zooming the camera.
 				glm::vec2 CursorPosition = glm::vec2(0.f);
 				SDL_GetMouseState(&CursorPosition.x, &CursorPosition.y);
-				if (!IsCursorInViewport(CursorPosition, IsPanelOpen))
+				if (!IsCursorInViewport(CursorPosition, IsPanelOpen, WindowWidth, WindowHeight))
 				{
 					Result.Event = InputEvent::NoOp;
 					break;
@@ -117,7 +117,7 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 				}
 				if (m_IsLMBPressed)
 				{
-					if (!IsCursorInViewport(glm::vec2(Event.motion.x, Event.motion.y), IsPanelOpen))
+					if (!IsCursorInViewport(glm::vec2(Event.motion.x, Event.motion.y), IsPanelOpen, WindowWidth, WindowHeight))
 					{
 						Result.Event = InputEvent::NoOp;
 						break;
@@ -138,9 +138,10 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 		    case SDL_EVENT_WINDOW_RESIZED:
 			{
 				// Window resized, it had been resized to data1 x data2, inside the window event struct
-				Result.Event = InputEvent::ResizeWindow;
+				Result.WindowResized = true;
 				Result.NewWindowWidth = Event.window.data1;
 				Result.NewWindowHeight = Event.window.data2;
+				break;
 			}
 			default:
 				break;
@@ -149,10 +150,11 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen)
 	return Result;
 }
 
-bool InputManager::IsCursorInViewport(const glm::vec2& CursorPosition, const bool IsPanelOpen)
+bool InputManager::IsCursorInViewport(const glm::vec2& CursorPosition, const bool IsPanelOpen, int WindowWidth, int WindowHeight)
 {
 	using namespace Commons;
-	const Layout::ViewportRect Viewport = Layout::GetViewportRect(IsPanelOpen);
+	// Live window size so the hit-test tracks the viewport after a resize (was the fixed overload).
+	const Layout::ViewportRect Viewport = Layout::GetViewportRect(IsPanelOpen, WindowWidth, WindowHeight);
 	return CursorPosition.x >= Viewport.X && CursorPosition.x <= Viewport.X + Viewport.Width &&
 		CursorPosition.y >= Viewport.Y && CursorPosition.y <= Viewport.Y + Viewport.Height;
 }

@@ -141,6 +141,16 @@ namespace Commons
             }
             return ViewportRect { 0.f, 0.f, VIEWPORT_COLLAPSED_WIDTH, VIEWPORT_COLLAPSED_HEIGHT };
         }
+        inline ViewportRect GetViewportRect(const bool IsPanelOpen, int WindowWidth, int WindowHeight)
+        {
+            // If the settings panel is opened, the viewport only occupies a portion of the screen
+            if (IsPanelOpen)
+            {
+                return ViewportRect { 0.f, 0.f, static_cast<float>(WindowWidth) * VIEWPORT_PORTION_WIDTH,
+                    static_cast<float>(WindowHeight) * VIEWPORT_PORTION_HEIGHT };
+            }
+            return ViewportRect { 0.f, 0.f, static_cast<float>(WindowWidth), static_cast<float>(WindowHeight) };
+        }
 
     }
 

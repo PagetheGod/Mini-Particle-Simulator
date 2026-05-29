@@ -22,14 +22,14 @@ void Camera::Orbit(const InputResult& Input)
     RecomputePosAndBasis();
 }
 
-void Camera::Zoom(const InputResult& Input)
+void Camera::Zoom(const InputResult& Input, const Layout::ViewportRect &ViewportRect)
 {
     // First calculate how much we zoom
     const float ZoomDelta = Input.ScrollDelta * m_ZoomSpeedFactor;
     // Apply the zoom delta to zoom y, zoom x can then be calculated on the fly
     m_ZoomY += ZoomDelta;
     m_ZoomY = glm::clamp(m_ZoomY, MIN_ZOOM_Y, MAX_ZOOM_Y);
-    m_ZoomX = m_ZoomY / Layout::ASPECT_RATIO;
+    m_ZoomX = m_ZoomY / (static_cast<float>(ViewportRect.Width) / static_cast<float>(ViewportRect.Height));
     m_ZoomX = glm::clamp(m_ZoomX, MIN_ZOOM_X, MAX_ZOOM_X);
 }
 // This function is NOT NEEDED for the GPU path, since our vulkan manager already takes care of it

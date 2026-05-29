@@ -126,6 +126,8 @@ void SoftwareRenderer::EndFrame(const bool IsPanelOpen)
     // SDL_SetRenderClipRect restricts all subsequent draw calls to
     // the given rectangle. This is the software equivalent of Vulkan's
     // VkScissor, articles will not render outside this rect.
+    // Option A: size-independent viewport. The fixed 1920x1080 layout is letterboxed into
+    // the window by SDL_SetRenderLogicalPresentation, so we don't consult the live window size.
     const Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
     const float ScaleX = Layout::RENDER_WIDTH / VpRect.Width;
     const float ScaleY = Layout::RENDER_HEIGHT / VpRect.Height;
@@ -133,8 +135,6 @@ void SoftwareRenderer::EndFrame(const bool IsPanelOpen)
     const SDL_Rect ClipRect = {static_cast<int>(VpRect.X), static_cast<int>(VpRect.Y),
         static_cast<int>(VpRect.Width * ScaleX), static_cast<int>(VpRect.Height * ScaleY)};
     SDL_SetRenderClipRect(m_Renderer, &ClipRect);
-
-
 
     // Draw particles ONLY in the viewport region:
     RenderParticles(VpRect);
