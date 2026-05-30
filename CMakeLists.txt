@@ -26,7 +26,6 @@ endif()
 
 
 
-
 # Output Directories, as it stands, this builds everything into a bin folder
 # I would like it to be a less nested but sometimes less is more, CMake is not easy :(
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -44,9 +43,7 @@ add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 # Add the subdirectory for glm, same deal, exclude from all tells CMake
 # to only build parts of glm that we depend on
 add_subdirectory(external/glm EXCLUDE_FROM_ALL)
-# ---------------------------------------------------------------------------
 # Vulkan — find the system installation
-# ---------------------------------------------------------------------------
 # find_package(Vulkan) searches for the Vulkan SDK installed on your system.
 # It uses the VULKAN_SDK environment variable to locate it.
 # REQUIRED means CMake will stop with an error if Vulkan is not found.
