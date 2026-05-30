@@ -1,4 +1,3 @@
-
 #include <algorithm>
 #include <SDL3/SDL_vulkan.h>
 #include <cstdio>
@@ -8,10 +7,8 @@
 #include <format>
 #include <set>
 #include <fstream>
-
 // Own headers
 #include "VulkanManager.hpp"
-
 #include "imgui_impl_vulkan.h"
 #include "ParticleManager.hpp"
 

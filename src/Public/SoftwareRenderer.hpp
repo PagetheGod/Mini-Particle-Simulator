@@ -7,15 +7,13 @@
 #include "Camera2D.hpp"
 #include "ParticleManager.hpp"
 
-
-
 // This class implements the rendering logics by using SDL3's built in software renderer
 // It says "software" but it's not fully CPU rendering. We still use GPU acceleration
 class SoftwareRenderer
 {
 public:
     // Constructors and destructor
-    SoftwareRenderer(ParticleManager* InParticleManagerPtr);
+    explicit SoftwareRenderer(ParticleManager* InParticleManagerPtr);
     SoftwareRenderer(const SoftwareRenderer&) = delete;
     SoftwareRenderer& operator=(const SoftwareRenderer&) = delete;
     SoftwareRenderer(SoftwareRenderer&&) = delete;
@@ -25,14 +23,12 @@ public:
     // Actual work functions
     // Initialize the software renderer and ImGui backend.
     // Returns true on success.
-    bool Initialize(SDL_Window *window);
+    bool Initialize(SDL_Window* window, const int WindowWidth, const int WindowHeight);
 
     // Called at the start of each frame, before any ImGui calls.
     void BeginFrame();
 
     // Called after ImGui::Render(), draws ImGui + clears the background.
-    // Option A (fixed-canvas resize): no window size needed — SDL's logical
-    // presentation letterboxes the fixed 1920x1080 layout into any window size.
     void EndFrame(const bool IsPanelOpen);
 
     // Getters and setters
@@ -53,7 +49,6 @@ private:
     ParticleManager* m_ParticleManager;
     // This can just be a plain Camera2D on the stack as well
     std::unique_ptr<Camera2D> m_Camera;
-
     // Constants
     static constexpr float PARTICLE_TEXTURE_WIDTH = 64;
     static constexpr float PARTICLE_TEXTURE_HEIGHT = 64;

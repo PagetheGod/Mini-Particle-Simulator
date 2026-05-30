@@ -9,7 +9,6 @@
 #include "SDL3/SDL_timer.h"
 //Own headers
 #include "Application.hpp"
-
 #include "Camera.hpp"
 #include "HardwareRenderer.hpp"
 #include "Commons.hpp"
@@ -55,14 +54,13 @@ bool Application::Initialize() {
 	// Set up the flags to create our window
 	// Last flag handles high-DPI displays so our drawable area matches the pixel counts
 	constexpr SDL_WindowFlags WindowFlags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE;
-	m_Window = SDL_CreateWindow(Constants::WINDOW_TITLE, Layout::WINDOW_WIDTH, Layout::WINDOW_HEIGHT,
+	m_Window = SDL_CreateWindow(Constants::WINDOW_TITLE, Layout::START_WINDOW_WIDTH, Layout::START_WINDOW_HEIGHT,
 		WindowFlags);
 	if (!m_Window)
 	{
 		Utility::ShowError("Error", "Could not create window! SDL_Error: %s", SDL_GetError());
 		return Result;
 	}
-
 	if (!ShowStartupDialog())
 	{
 		return false;
@@ -86,7 +84,7 @@ bool Application::Initialize() {
 	if (m_RendererType == RendererType::Software)
 	{
 		m_SoftwareRenderer = std::make_unique<SoftwareRenderer>(m_ParticleManager.get());
-		Result = m_SoftwareRenderer->Initialize(m_Window);
+		Result = m_SoftwareRenderer->Initialize(m_Window, m_WindowWidth, m_WindowHeight);
 		if (!Result)
 		{
 			Utility::ShowError("Software Renderer", "Failed to initialize software renderer.");
@@ -178,7 +176,8 @@ bool Application::Frame(const DeltaTimeData& InDeltaTimeData, const InputResult&
 		{
 	    	if (m_RendererType == RendererType::Software)
 	    	{
-	    		m_Camera2D->Pan(Input.MouseDelta.x, Input.MouseDelta.y);
+	    		m_Camera2D->Pan(Input.MouseDelta.x, Input.MouseDelta.y, m_WindowWidth,
+	    			m_WindowHeight, m_UIManager->IsPanelOpen());
 	    	}
 	    	else
 	    	{
@@ -441,12 +440,12 @@ void Application::SetUIandFontScale()
                   << "'. Falling back to ImGui default font." << std::endl;
         ImGuiIO.Fonts->AddFontDefault();
     }
-    /* On HiDPI (Retina) we rasterize at BaseFontSize * DpiScale, so the
-     * font texture has the extra detail, then set FontGlobalScale = 1/DpiScale
-     * so ImGui draws the texts at their base 36 units size in the logical
-     * canvas. Combined with SDL_SetRenderLogicalPresentation above, the
-     * font texture maps 1:1 to physical pixels on a 2x display, pixel-perfect
-     * crisp text without blurry upscaling.
+    /* On HiDPI we rasterize at BaseFontSize * DpiScale, so the font texture
+     * has the extra detail, then set FontGlobalScale = 1/DpiScale so ImGui
+     * lays out text at its base point size. The software path draws ImGui
+     * under DISABLED (raw-pixel) logical presentation, so the high-res font
+     * texture maps 1:1 to physical pixels — pixel-perfect crisp text without
+     * blurry upscaling. (The Vulkan path gets the same via its pixel-sized swapchain.)
      */
     ImGuiIO.FontGlobalScale = 1.f / DpiScale;
 }

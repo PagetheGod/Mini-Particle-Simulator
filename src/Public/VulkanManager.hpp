@@ -1,9 +1,4 @@
-//
-// Created by YWvin on 2026/3/29.
-//
-
 #pragma once
-
 #include <vulkan/vulkan.h>
 #include <SDL3/SDL.h>
 #include <vector>

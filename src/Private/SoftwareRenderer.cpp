@@ -1,14 +1,8 @@
-﻿//
-// Created by YWvin on 2026/3/24.
-//
-
-//External libs and STL
+﻿//External libs and STL
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include <iostream>
-#include <string>
-#include "SDL3/SDL_filesystem.h"
 #include "SDL3/SDL_render.h"
 #include "glm/exponential.hpp"
 //Own headers
@@ -41,7 +35,7 @@ SoftwareRenderer::~SoftwareRenderer()
     m_Renderer = nullptr;
 }
 
-bool SoftwareRenderer::Initialize(SDL_Window* Window)
+bool SoftwareRenderer::Initialize(SDL_Window* Window, const int WindowWidth, const int WindowHeight)
 {
     /* Create the SDL_Renderer
      * SDL_CreateRenderer picks the best available backend automatically:
@@ -54,7 +48,6 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
      */
     m_Window = Window;
     m_Renderer = SDL_CreateRenderer(m_Window, nullptr);
-    SDL_SetRenderVSync(m_Renderer, 1);
 
     if (!m_Renderer)
     {
@@ -64,23 +57,16 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     SDL_SetRenderVSync(m_Renderer, 1);
 
     /*
-     * Added this to resolve weird size issues with Retina display
-     * From what I understand, basically this is a DPI-aware issues
-     * Most of the time when we work with drawing things to a screen, we deal with
-     * logical pixels(or points), the OS then scale them behind the scene to map
-     * them to real pixels, this abstracts things away and make our life easier
-     * However, in our case, we asked for High pixel density in app init because our fonts
-     * needed to look sharp and eligible, this means we have to work with real pixels now
-     * And on mac, the 1920 x 1080 window has way more pixels because it's Retina
-     * So we are drawing 1920 x 1080 pixels to a window that needs a much larger frame buffer
-     *
-     * This call basically resets us to drawing to logical points, then SDL will just expand
-     * our buffer to fit the drawable area
-     * Letterbox just tells SDL to not stretch things when user resizes
+     * Deliberately NO SDL_SetRenderLogicalPresentation here. Logical presentation is
+     * per-frame render state, and EndFrame is its sole owner: every frame it sets STRETCH
+     * over the fixed RENDER_WIDTH x RENDER_HEIGHT particle canvas, then DISABLED (raw
+     * pixels) for ImGui. Nothing draws before the first EndFrame, so any value set here
+     * would only be overwritten unused. One owner is what keeps this path window-size
+     * scalable: the particle canvas is a fixed logical size SDL stretches into any window,
+     * so resizing needs no init-time constants. HiDPI text crispness is handled separately
+     * by the font scaling in Application::SetUIandFontScale (rasterize at x DpiScale,
+     * FontGlobalScale = 1/DpiScale), rendered under the DISABLED (raw-pixel) presentation.
      */
-    SDL_SetRenderLogicalPresentation(m_Renderer,
-        Commons::Layout::WINDOW_WIDTH, Commons::Layout::WINDOW_HEIGHT,
-        SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     // Initialize backends
     // The SDL3 platform backend handles input (mouse, keyboard, clipboard).
@@ -93,9 +79,7 @@ bool SoftwareRenderer::Initialize(SDL_Window* Window)
     {
         return false;
     }
-
-    m_Camera = std::make_unique<Camera2D>();
-
+    m_Camera = std::make_unique<Camera2D>(WindowWidth, WindowHeight);
     return true;
 }
 
@@ -117,7 +101,7 @@ void SoftwareRenderer::EndFrame(const bool IsPanelOpen)
     // Set logical resolution to 2560 x 1440 for particle supersampling
     // SDL scales all draw calls to fit the 1920×1080 window.
     SDL_SetRenderLogicalPresentation(m_Renderer, Layout::RENDER_WIDTH, Layout::RENDER_HEIGHT,
-        SDL_LOGICAL_PRESENTATION_LETTERBOX);
+        SDL_LOGICAL_PRESENTATION_STRETCH);
     // Clear the entire screen with the background color.
     SDL_SetRenderDrawColorFloat(m_Renderer, 0.09f, 0.09f, 0.09f, 1.0f);
     SDL_RenderClear(m_Renderer);
@@ -126,14 +110,10 @@ void SoftwareRenderer::EndFrame(const bool IsPanelOpen)
     // SDL_SetRenderClipRect restricts all subsequent draw calls to
     // the given rectangle. This is the software equivalent of Vulkan's
     // VkScissor, articles will not render outside this rect.
-    // Option A: size-independent viewport. The fixed 1920x1080 layout is letterboxed into
-    // the window by SDL_SetRenderLogicalPresentation, so we don't consult the live window size.
     const Layout::ViewportRect VpRect = Layout::GetViewportRect(IsPanelOpen);
-    const float ScaleX = Layout::RENDER_WIDTH / VpRect.Width;
-    const float ScaleY = Layout::RENDER_HEIGHT / VpRect.Height;
 
-    const SDL_Rect ClipRect = {static_cast<int>(VpRect.X), static_cast<int>(VpRect.Y),
-        static_cast<int>(VpRect.Width * ScaleX), static_cast<int>(VpRect.Height * ScaleY)};
+    const SDL_Rect ClipRect = {0, 0,
+        static_cast<int>(VpRect.Width), static_cast<int>(VpRect.Height)};
     SDL_SetRenderClipRect(m_Renderer, &ClipRect);
 
     // Draw particles ONLY in the viewport region:

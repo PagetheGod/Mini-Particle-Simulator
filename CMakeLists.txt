@@ -75,8 +75,6 @@ add_executable(${PROJECT_NAME}
         src/Public/Camera.hpp
         src/Private/InputManager.cpp
         src/Public/InputManager.hpp
-        src/Private/ThreadPool.cpp
-        src/Public/ThreadPool.hpp
         src/Private/SIMD.cpp
         src/Public/SIMD.hpp
         src/Public/VulkanManager.hpp

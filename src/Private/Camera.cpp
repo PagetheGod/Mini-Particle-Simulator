@@ -29,7 +29,8 @@ void Camera::Zoom(const InputResult& Input, const Layout::ViewportRect &Viewport
     // Apply the zoom delta to zoom y, zoom x can then be calculated on the fly
     m_ZoomY += ZoomDelta;
     m_ZoomY = glm::clamp(m_ZoomY, MIN_ZOOM_Y, MAX_ZOOM_Y);
-    m_ZoomX = m_ZoomY / (static_cast<float>(ViewportRect.Width) / static_cast<float>(ViewportRect.Height));
+    const float InverseAspectRatio = static_cast<float>(ViewportRect.Height) / static_cast<float>(ViewportRect.Width);
+    m_ZoomX = m_ZoomY * InverseAspectRatio;
     m_ZoomX = glm::clamp(m_ZoomX, MIN_ZOOM_X, MAX_ZOOM_X);
 }
 // This function is NOT NEEDED for the GPU path, since our vulkan manager already takes care of it

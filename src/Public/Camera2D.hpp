@@ -10,7 +10,7 @@
 class Camera2D
 {
 public:
-    Camera2D() = default;
+    Camera2D(int StartWindowWidth, int StartWindowHeight);
     ~Camera2D() = default;
 
     // Convert a world-space position to screen-space position.
@@ -24,7 +24,7 @@ public:
     // Pan the camera by a screen-space delta (e.g., from mouse drag).
     // Dividing by Zoom ensures panning feels consistent at all zoom levels:
     // when zoomed in 2x, dragging 100px moves the world 50 units.
-    void Pan(float ScreenDX, float ScreenDY);
+    void Pan(float ScreenDX, float ScreenDY, int WindowWidth, int WindowHeight, bool IsPanelOpen);
 
     // Zoom toward a screen-space point (e.g., the cursor position).
     // This makes the point under the cursor stay under the cursor after zooming.
@@ -53,8 +53,8 @@ private:
     float m_Zoom = 2.f;
     // Pan bounds in world space. Symmetric around 0, sized to the current viewport width.
     // These get updated whenever the panel toggles via OnViewportResized().
-    float m_LeftmostPan = -Commons::Layout::VIEWPORT_WIDTH_OPEN;
-    float m_RightmostPan = Commons::Layout::VIEWPORT_WIDTH_OPEN;
+    float m_LeftmostPan = 0.f;
+    float m_RightmostPan = 0.f;
 
     // Constants
     static constexpr float MIN_ZOOM = 1.f;

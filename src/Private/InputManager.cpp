@@ -139,8 +139,6 @@ InputResult InputManager::ProcessInput(const bool IsPanelOpen, int WindowWidth, 
 			{
 				// Window resized, it had been resized to data1 x data2, inside the window event struct
 				Result.WindowResized = true;
-				Result.NewWindowWidth = Event.window.data1;
-				Result.NewWindowHeight = Event.window.data2;
 				break;
 			}
 			default:

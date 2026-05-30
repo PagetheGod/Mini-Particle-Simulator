@@ -1,5 +1,4 @@
-﻿
-#include <algorithm>
+﻿#include <algorithm>
 #include <array>
 #include <future>
 #include <SDL3/SDL_vulkan.h>
@@ -7,7 +6,6 @@
 #include <cstring>  // for strcmp
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
-#include "glm/ext/matrix_transform.hpp"
 // Own headers
 #include "HardwareRenderer.hpp"
 #include "Camera.hpp"

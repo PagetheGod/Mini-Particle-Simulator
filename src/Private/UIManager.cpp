@@ -31,7 +31,7 @@ void UIManager::DrawStatusBar(const DeltaTimeData& InDeltaTimeData, uint32_t Par
     using namespace Commons::Layout;
     // Position: full width, at the bottom of the window
     // Live window size (ImGui coordinate space) so the bar tracks resizes instead of sitting at the
-    // hardcoded 1920x1080 spot. Same VIEWPORT_PORTION ratios the viewport/blit use, so they line up.
+    // hardcoded 1920 x 1080 spot. Same VIEWPORT_PORTION ratios the viewport/blit use, so they line up.
     const ImVec2 DisplaySize = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(0.f, DisplaySize.y * VIEWPORT_PORTION_HEIGHT));
     ImGui::SetNextWindowSize(ImVec2(DisplaySize.x, DisplaySize.y * (1.f - VIEWPORT_PORTION_HEIGHT)));
@@ -192,7 +192,7 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
     if (Config.Mode == EmitterMode::Burst)
     {
         // How often does the emitter spawn particles in burst mode
-        IsConfigDirty |= ImGui::SliderFloat("Burst Interval", &Config.BurstInterval, 0.5f, 2.5f);
+        IsConfigDirty |= ImGui::SliderFloat("Burst Interval", &Config.BurstInterval, 0.5f, 3.f);
         // We reuse the Emitter Rate variable for both burst and continuous emitter
         IsConfigDirty |= ImGui::SliderInt("Particle Count Per Burst", &Config.EmissionRate,
             5, 5000);
@@ -229,13 +229,13 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
             case SpawnShape::Sphere:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Radius", &Config.SphereRadius,
-                    0.1f, 100.f, "%.1f");
+                    0.1f, 200.f, "%.1f");
                 break;
             }
             case SpawnShape::Cone:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Axis Length", &Config.ConeDimensions.x,
-                    0.1f, 100.f, "%.1f");
+                    0.1f, 200.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Half Angle", &Config.ConeDimensions.y,
                     0.5f, 45.f, "%.1f");
                 break;
@@ -245,11 +245,11 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
                 // Min is 0 so the user can flatten one axis to make a plane
                 bool DimensionDirty = false;
                 DimensionDirty |= ImGui::SliderFloat("Width", &Config.BoxDimensions.x,
-                    0.f, 200.f, "%.1f");
+                    0.f, 350.f, "%.1f");
                 DimensionDirty |= ImGui::SliderFloat("Height", &Config.BoxDimensions.y,
-                    0.f, 200.f, "%.1f");
+                    0.f, 350.f, "%.1f");
                 DimensionDirty |= ImGui::SliderFloat("Depth", &Config.BoxDimensions.z,
-                    0.f, 200.f, "%.1f");
+                    0.f, 350.f, "%.1f");
                 if (DimensionDirty)
                 {
                     // At most one axis can be zero (plane), otherwise SpawnParticles_Speed
@@ -296,11 +296,11 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
             case SpawnShape::Ring:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Inner Radius", &Config.RingDimensions.x,
-                    0.f, 100.f, "%.1f");
+                    0.f, 200.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Outer Radius", &Config.RingDimensions.y,
-                    0.f, 100.f, "%.1f");
+                    0.f, 200.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Height", &Config.RingDimensions.z,
-                    0.f, 150.f, "%.1f");
+                    0.f, 200.f, "%.1f");
                 // Clamp the min to be smaller than max
                 if (Config.RingDimensions.x > Config.RingDimensions.y)
                 {
@@ -311,9 +311,9 @@ bool UIManager::DrawSettingsPanel(ParticleSimulatorConfig& Config)
             case SpawnShape::Cylinder:
             {
                 IsConfigDirty |= ImGui::SliderFloat("Height", &Config.CylinderDimensions.y,
-                    0.f, 200.f, "%.1f");
+                    0.f, 300.f, "%.1f");
                 IsConfigDirty |= ImGui::SliderFloat("Radius", &Config.CylinderDimensions.x,
-                    0.f, 150.f, "%.1f");
+                    0.f, 200.f, "%.1f");
                 break;
             }
             default:
@@ -333,9 +333,9 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // Min and max base speed at spawn
             IsConfigDirty |= ImGui::SliderFloat("Min Particle Velocity at Spawn", &Config.Speed.x,
-                0.f, 100.f);
+                0.f, 150.f);
             IsConfigDirty |= ImGui::SliderFloat("Max Particle Velocity at Spawn", &Config.Speed.y,
-                0.f, 100.f);
+                0.f, 150.f);
             // Clamp
             if (Config.Speed.x >= Config.Speed.y)
             {
@@ -346,7 +346,7 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // No random interval, just a fix speed
             IsConfigDirty |= ImGui::SliderFloat("Particle velocity at Spawn", &Config.Speed.x,
-                0.f, 100.f);
+                0.f, 150.f);
         }
         Config.IsRandomSpeed = IsRandomSpeed;
 
@@ -383,9 +383,9 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         {
             // Min and max scales of the particles
             IsConfigDirty |= ImGui::SliderFloat("Size Min", &Config.Scale.x,
-                0.1f, 1.75f, "%.1f");
+                0.3f, 2.f, "%.1f");
             IsConfigDirty |= ImGui::SliderFloat("Size Max", &Config.Scale.y,
-                0.1f, 1.75f, "%.1f");
+                0.3f, 2.f, "%.1f");
             if (Config.Scale.x >= Config.Scale.y)
             {
                 Config.Scale.x = std::max(0.1f, Config.Scale.y - 0.1f);
@@ -394,7 +394,7 @@ bool UIManager::DrawParticleInit(ParticleSimulatorConfig &Config) {
         else
         {
             // No random interval for spawn size, just fixed
-            IsConfigDirty |= ImGui::SliderFloat("Size", &Config.Scale.x, 0.1f, 1.75f, "%.1f");
+            IsConfigDirty |= ImGui::SliderFloat("Size", &Config.Scale.x, 0.3f, 2.f, "%.1f");
         }
         Config.IsRandomScale = IsRandomScale;
 
@@ -641,26 +641,26 @@ bool UIManager::DrawForceSettings(ForceConfig& ForceConfig)
                         ImGui::Text("Positive Strength = attraction, Negative Strength = repulsion");
                         ImGui::Spacing();
                         IsConfigDirty |= ImGui::SliderFloat("Point Force Strength", &ForceDataRef.Strength,
-                            -75.f, 75.f, "%.1f");
+                            -100.f, 100.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Influence Radius", &ForceDataRef.PointRadius,
                             1.f, 350.f, "%.0f");
-                        IsConfigDirty |= ImGui::SliderFloat("Position X", &ForceDataRef.Direction.x,-50.f, 50.f, "%.1f");
-                        IsConfigDirty |= ImGui::SliderFloat("Position Y", &ForceDataRef.Direction.y, -50.f, 50.f, "%.1f");
-                        IsConfigDirty |= ImGui::SliderFloat("Position Z", &ForceDataRef.Direction.z, 0.f, 20.f, "%.1f");
+                        IsConfigDirty |= ImGui::SliderFloat("Position X", &ForceDataRef.Direction.x,-100.f, 100.f, "%.1f");
+                        IsConfigDirty |= ImGui::SliderFloat("Position Y", &ForceDataRef.Direction.y, -100.f, 100.f, "%.1f");
+                        IsConfigDirty |= ImGui::SliderFloat("Position Z", &ForceDataRef.Direction.z, 0.f, 50.f, "%.1f");
                         break;
                     }
                     case ForceType::Vortex:
                     {
                         IsConfigDirty |= ImGui::SliderFloat("Vortex Tangential Strength", &ForceDataRef.Strength,
-                            0.f, 50.f, "%.1f");
+                            0.f, 100.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Vortex Radial Strength", &ForceDataRef.VortexPull,
-                            0.f, 50.f, "%.1f");
+                            0.f, 100.f, "%.1f");
                         break;
                     }
                     case ForceType::Directional:
                     {
                         IsConfigDirty |= ImGui::SliderFloat("Wind Strength", &ForceDataRef.Strength,
-                            0.f, 75.f, "%.1f");
+                            0.f, 100.f, "%.1f");
                         IsConfigDirty |= ImGui::SliderFloat("Wind Period", &ForceDataRef.WindPeriod,
                              0.5f, 5.f, "%.1f Seconds");
                         IsConfigDirty |= ImGui::SliderFloat("Wind Direction X", &ForceDataRef.Direction.x,

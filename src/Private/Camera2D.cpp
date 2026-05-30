@@ -4,6 +4,14 @@
 
 using namespace Commons;
 
+Camera2D::Camera2D(int StartWindowWidth, int StartWindowHeight)
+{
+    // Set the initial left and right most pan limit
+    const Layout::ViewportRect ViewportRect = Layout::GetViewportRect(false, StartWindowWidth, StartWindowHeight);
+    m_LeftmostPan = -ViewportRect.Width;
+    m_RightmostPan = ViewportRect.Width;
+}
+
 glm::vec2 Camera2D::WorldToScreen(float WorldX, float WorldY, const Layout::ViewportRect& InViewportRect) const
 {
     glm::vec2 ScreenPos = glm::vec2(0.f);
@@ -21,12 +29,13 @@ glm::vec2 Camera2D::ScreenToWorld(float ScreenX, float ScreenY, const Layout::Vi
     return WorldPos;
 }
 
-void Camera2D::Pan(float ScreenDX, float ScreenDY)
+void Camera2D::Pan(float ScreenDX, float ScreenDY, int WindowWidth, int WindowHeight, bool IsPanelOpen)
 {
     m_CameraPosX -= ScreenDX / m_Zoom;
     m_CameraPosX = std::clamp(m_CameraPosX, m_LeftmostPan, m_RightmostPan);
     m_CameraPosY -= ScreenDY / m_Zoom;
-    m_CameraPosY = std::clamp(m_CameraPosY, -Layout::VIEWPORT_HEIGHT_OPEN, Layout::VIEWPORT_HEIGHT_OPEN);
+    const Layout::ViewportRect ViewportRect = Layout::GetViewportRect(IsPanelOpen, WindowWidth, WindowHeight);
+    m_CameraPosY = std::clamp(m_CameraPosY, -ViewportRect.Height, ViewportRect.Height);
 }
 
 void Camera2D::ZoomAt(float ZoomDelta, float ScreenX, float ScreenY, Layout::ViewportRect& InViewportRect)

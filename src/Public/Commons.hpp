@@ -3,7 +3,6 @@
 #include <cstdarg>
 #include <cstdio>
 #include <SDL3/SDL_messagebox.h>
-
 // The PCG random lib I grabbed has virtually no MSVC support
 // So guarding against that
 #ifndef _MSC_VER
@@ -90,37 +89,24 @@ namespace Commons
         static constexpr uint32_t NUM_THREADS_USED = 16;
 
     }
-    // There are many hardcoded screen/viewport size constants here
-    // This is intentional since we are not going to allow resizable window (bit more work than we can handle)
-    // So just using a bunch of constants is fine
     namespace Layout
     {
-        // The size of the entire GUI window, this is fixed at start-up
-        // Not supporting resizing at the moment because it's too much work
-        static constexpr int WINDOW_WIDTH = 1920;
-        static constexpr int WINDOW_HEIGHT = 1080;
-
         // Supersampling render resolution
         // Particles render at this resolution in the offscreen target,
         // then get downscaled to the viewport region via blit.
         // 2560×1440 at a 1920×1080 window = ~1.78x supersampling.
         static constexpr int RENDER_WIDTH = 2560;
         static constexpr int RENDER_HEIGHT = 1440;
+        // Window width and height, this is just for the default start up window
+        // Since the app is now resizable
+        static constexpr int START_WINDOW_WIDTH = 1980;
+        static constexpr int START_WINDOW_HEIGHT = 1080;
         // Aspect ratio
         static constexpr float ASPECT_RATIO = 16.f / 9.f;
         // Percentage of the window occupied by render viewport(horizontal)
         static constexpr float VIEWPORT_PORTION_WIDTH = 0.6f;
         // Percentage of the window occupied by  render viewport(vertical)
         static constexpr float VIEWPORT_PORTION_HEIGHT = 0.8f;
-        // Viewport dimensions when the panels are open
-        static constexpr float VIEWPORT_WIDTH_OPEN = WINDOW_WIDTH * VIEWPORT_PORTION_WIDTH;
-        static constexpr float VIEWPORT_HEIGHT_OPEN = WINDOW_HEIGHT * VIEWPORT_PORTION_HEIGHT;
-        // Panel dimensions
-        static constexpr float PANEL_WIDTH = WINDOW_WIDTH - VIEWPORT_WIDTH_OPEN;
-        static constexpr float STATUS_BAR_HEIGHT = WINDOW_HEIGHT - VIEWPORT_HEIGHT_OPEN;
-        // Derived: viewport sizes when panels are COLLAPSED
-        static constexpr float VIEWPORT_COLLAPSED_WIDTH = static_cast<float>(WINDOW_WIDTH);  // 1920
-        static constexpr float VIEWPORT_COLLAPSED_HEIGHT = static_cast<float>(WINDOW_HEIGHT); // 1080
 
         // Helper struct storing viewport dimensions as a "rectangle"
         // Stuffs I learned from WIN32 with UserRect, ClientRect
@@ -129,17 +115,19 @@ namespace Commons
             // Default to dimensions when the panels are collapsed
             float X = 0.f;
             float Y = 0.f;
-            float Width = VIEWPORT_WIDTH_OPEN;
-            float Height = VIEWPORT_HEIGHT_OPEN;
+            float Width = 1920.f;
+            float Height = 1080.f;
         };
         // Helper function to get viewport dimensions based on setting panel state(collapsed/open)
         // Since we are now supporting resizing, this do a little bit more, it now calculates the actual sizes in real time
         inline ViewportRect GetViewportRect(const bool IsPanelOpen)
         {
+            // This overload is for the software path only, where SDL3 stretches things to fit
             if (IsPanelOpen) {
-                return ViewportRect { 0.f, 0.f, VIEWPORT_WIDTH_OPEN, VIEWPORT_HEIGHT_OPEN };
+                return ViewportRect { 0.f, 0.f, RENDER_WIDTH * VIEWPORT_PORTION_WIDTH,
+                    RENDER_HEIGHT * VIEWPORT_PORTION_HEIGHT };
             }
-            return ViewportRect { 0.f, 0.f, VIEWPORT_COLLAPSED_WIDTH, VIEWPORT_COLLAPSED_HEIGHT };
+            return ViewportRect { 0.f, 0.f, RENDER_WIDTH, RENDER_HEIGHT };
         }
         inline ViewportRect GetViewportRect(const bool IsPanelOpen, int WindowWidth, int WindowHeight)
         {

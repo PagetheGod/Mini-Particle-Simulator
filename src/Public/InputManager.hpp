@@ -23,7 +23,6 @@ enum class InputEvent : uint8_t
     CameraZoom,
     TogglePause,
     ToggleViewport,
-    ResizeWindow,
     Quit
 };
 
@@ -37,9 +36,6 @@ struct InputResult
     glm::vec2 MouseDelta = glm::vec2(0.f);
     // Current mouse position, for zoom-at-cursor,
     glm::vec2 MousePosition = glm::vec2(0.f);
-    // New window sizes that come from window resize
-    int NewWindowWidth = 1920;
-    int NewWindowHeight = 1080;
     // Scroll delta, for zooming
     float ScrollDelta = 0.f;
     InputEvent Event = InputEvent::NoOp;
