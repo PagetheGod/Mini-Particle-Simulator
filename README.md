@@ -184,3 +184,8 @@ optimistic "best case scenarios" ourselves, lol.
 * **The playback length is hardcoded** (15 seconds) rather than being a user-tunable parameter.
 
 ---
+
+## At the end...
+
+If you are still here, and you had decided to try our little project. Then allow the authors to say a huge thank you! And a big sorry for problems
+that you would have (very likely) encountered. Goodbye, and happy simulating!
