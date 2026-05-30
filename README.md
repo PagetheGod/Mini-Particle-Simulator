@@ -169,7 +169,7 @@ Just to give a rough sense of where we're at. These are tested in Release builds
 * **GPU path**: holds 240 FPS at over **300,000** particles.
 
 A couple of caveats. First, 240 FPS is our display's VSync cap, so these are really "the particle count at which we're still pinned to the refresh ceiling"
-rather than maximum throughput. The true ceiling might be higher (on our benchmark machine). Second, and probably more importantly: these numbers were obtained by stress testing on a fairly
+rather than maximum throughput. The true ceiling might be higher (on our benchmark machine). Second, and probably more importantly: these numbers were obtained by stress testing on a 
 rather high-end machine (**Ryzen 9 9950X + RTX 5090 + 64 GB of RAM**). So it's very likely that the performance will be worse on most other setups, we treat these numbers as 
 optimistic "best case scenarios" ourselves, lol.
 
