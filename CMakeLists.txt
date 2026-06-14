@@ -267,7 +267,7 @@ foreach (SHADER_IDX RANGE 0 ${SHADER_COUNT})
             ${SHADER_SRC}
             -Fo ${SHADER_SPV}
             -fspv-target-env=vulkan1.3
-            -Zpc
+            -Zpr
             -WX
         DEPENDS ${SHADER_SRC}
         COMMENT "Compiling HLSL: ${SHADER_OUT_NAME}.hlsl [${SHADER_PROFILE}] → ${SHADER_OUT_NAME}.spv"

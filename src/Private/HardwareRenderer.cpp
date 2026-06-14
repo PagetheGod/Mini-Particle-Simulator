@@ -116,7 +116,6 @@ void HardwareRenderer::EndFrame(const bool IsPanelOpen, int WindowWidth, int Win
     m_Camera->GetProjectionMatrix(ProjectionMatrix,
         static_cast<float>(Viewport.Width) / static_cast<float>(Viewport.Height));
     const glm::mat4x4 ViewProjection = ProjectionMatrix * ViewMatrix;
-    PushConstants.ViewProjection = glm::transpose(ViewProjection);
     // Upload the particle data, we wait for the fence here to synchronize
     const uint32_t CurrentFrameIndex = m_VulkanContextPtr->CurrentFrame;
     // Needs to wait for GPU to finish its current work
